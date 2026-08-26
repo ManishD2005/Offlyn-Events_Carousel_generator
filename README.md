@@ -7,11 +7,34 @@ Turns a CSV of events into branded Offlyn slide carousels, ready to post.
 ## What it does
 
 - Paste or upload a CSV. Any column order — a mapper guesses which column is which and shows a live preview of the first card.
-- Groups events into one carousel per day, ordered by start time.
+- Groups events into one carousel per day, ordered by start time. Days too small
+  to fill a slide merge into the next date rather than going out half empty.
 - Renders 4:5 slides (1080×1350) with up to 9 event cards each, matching the Offlyn brand.
 - Upload a title slide as a PNG — it leads every carousel as slide 1.
 - Exports per day: PDF, a zip of PNGs, or a single slide as PNG.
 - Click any text on a slide to edit it before exporting.
+
+## How days become carousels
+
+A slide holds nine events. A day with nine or more fills at least one on its own,
+so it posts by itself. A day with fewer doesn't, so it rides along with the next
+date and the carousel is headed by the span it covers:
+
+| Events per day | Result |
+|---|---|
+| 4 on the 28th, 5 on the 29th | one post, `AUG 28 - 29` |
+| 12 on the 28th, 3 on the 29th | two posts — the 3 has nothing after it to merge into |
+| 3 + 3 + 3 across the 26th–28th | one post, `AUG 26 - 28` |
+| 2 on the 28th, 20 on the 29th | one post, `AUG 28 - 29` |
+
+Days accumulate until they fill a slide, then the group closes — so a run of
+small days collects into one post rather than all piling onto the next big one.
+A short tail at the end of the sheet has nothing left to merge into and posts as
+it is. Each slide is still headed by the dates actually on it, so slide 1 of a
+merged carousel reads `AUG 28 - 29` while a later all-29th slide reads `AUG 29`.
+
+Pick **One carousel — fill every slide** in the mapper if you'd rather ignore
+day boundaries entirely.
 
 ## Title slide
 
@@ -74,6 +97,10 @@ than scaled — the frame really does start at x 49, y 356.
   carousel usually isn't, so the frame wraps only the rows that hold cards
   instead of leaving a wall of pink. Set `frameHeight()` to return a constant
   957 if you would rather every slide framed the same.
+- **Colour.** The frame cycles pink → orange → green → yellow → sky blue across
+  a carousel's slides and wraps round if there are more than five, so a post
+  reads as a sequence. Each carousel restarts at pink. The order lives in
+  `TINTS`; the title slide is skipped, since it has no frame to colour.
 - **Cards.** Fixed 293×285 with a 5px radius. The time and host chips are
   positioned absolutely rather than flowed, so a one-line title never lifts them
   out of the rhythm the grid reads by.

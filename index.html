@@ -318,7 +318,7 @@
 <main id="editor">
   <div class="card">
     <h1>Event Carousel</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 14</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 15</span></p>
 
     <label for="dateLabel">Date label (shown on slide header)</label>
     <input id="dateLabel" class="field" value="AUG 21 - 22" autocomplete="off">
@@ -357,7 +357,7 @@
         <div><label for="mHost">Host <span class="hint">reads &ldquo;Hosted by&hellip;&rdquo;</span></label><select id="mHost"></select></div>
         <div><label for="mDate">Date <span class="hint">groups the slides</span></label><select id="mDate"></select></div>
         <div><label for="dateMode">Slide layout</label><select id="dateMode">
-          <option value="days">One carousel per day</option>
+          <option value="days">One carousel per day &mdash; short days merge forward</option>
           <option value="pack">One carousel &mdash; fill every slide</option>
           <option value="manual">One carousel &mdash; ignore dates</option>
         </select></div>
@@ -1108,6 +1108,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   // A full slide is 3 rows; the last slide of a carousel is usually not, and a
   // full-height frame under two cards is a wall of pink. The frame wraps only
   // the rows that hold cards, which is also why the stamp is built per height.
+  // The frame changes colour slide to slide so a carousel reads as a sequence
+  // rather than five of the same picture. Each carousel restarts at pink, so
+  // every post opens the same way.
+  var TINTS = ["#E159CA", "#F2913F", "#45C46F", "#F5CE45", "#58B6EE"];
+
   var FRAME_W = 983, ROW_H = 285, ROW_GAP = 15, FRAME_PAD = 36, stampCache = {};
 
   function frameHeight(count){
@@ -1115,13 +1120,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return rows * ROW_H + (rows - 1) * ROW_GAP + FRAME_PAD * 2;
   }
 
-  function stamp(H){
-    if(!stampCache[H]){
-      stampCache[H] = '<svg width="' + FRAME_W + '" height="' + H + '" viewBox="0 0 ' + FRAME_W + ' ' + H + '"'
+  function stamp(H, tint){
+    var key = H + "|" + tint;
+    if(!stampCache[key]){
+      stampCache[key] = '<svg width="' + FRAME_W + '" height="' + H + '" viewBox="0 0 ' + FRAME_W + ' ' + H + '"'
         + ' xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
-        + '<path d="' + stampPath(FRAME_W, H, 33.5, 17) + '" fill="#E159CA"/></svg>';
+        + '<path d="' + stampPath(FRAME_W, H, 33.5, 17) + '" fill="' + tint + '"/></svg>';
     }
-    return stampCache[H];
+    return stampCache[key];
   }
 
   function esc(s){
@@ -1156,7 +1162,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       +   '<p class="s-date" contenteditable="true" spellcheck="false" data-f="label" data-i="' + si + '">' + esc(slide.label) + '</p>'
       +   '<div class="logo">' + LOGO + '</div>'
       + '</div>'
-      + '<div class="frame" style="height:' + fh + 'px">' + stamp(fh)
+      + '<div class="frame" style="height:' + fh + 'px">' + stamp(fh, slide.tint || TINTS[0])
       +   '<div class="grid" style="grid-template-rows:repeat(' + rows + ',' + ROW_H + 'px)">' + cards + '</div>'
       + '</div>'
       + '</div>';
@@ -1191,6 +1197,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return out.length ? out : [{ label: manual, items: [] }];
   }
 
+  // A day that can't fill a slide isn't worth its own post, so it rides along
+  // with the next date and the carousel's header spans both. Once enough days
+  // have collected to fill a slide the group closes, which is why a nine-event
+  // day still goes out on its own. A short tail at the end has nothing left to
+  // merge into, so it posts as it is.
   function byDate(){
     var order = [], buckets = {};
     events.forEach(function(e){
@@ -1202,9 +1213,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       var A = buckets[a][0]._d, B = buckets[b][0]._d;
       return (A ? A.ord : 1e9) - (B ? B.ord : 1e9);
     });
-    return order.map(function(k){
-      return buckets[k].slice().sort(function(x,y){ return minutesOf(x.time) - minutesOf(y.time); });
+    var groups = [], carry = [];
+    order.forEach(function(k){
+      // Days arrive in date order and each is sorted by time, so appending
+      // keeps the group in date-then-time order without a second sort.
+      carry = carry.concat(buckets[k].slice().sort(function(x,y){
+        return minutesOf(x.time) - minutesOf(y.time);
+      }));
+      if(carry.length >= PER_SLIDE){ groups.push(carry); carry = []; }
     });
+    if(carry.length) groups.push(carry);
+    return groups;
   }
 
   // "days"   one carousel per date  (default)
@@ -1217,7 +1236,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
     if(dateMode === "days"){
       byDate().forEach(function(list){
-        var label = list[0]._d ? list[0]._d.label : manual;
+        var label = rangeLabel(list, manual);
         decks.push({ label: label, slides: makeSlides(list, label) });
       });
     } else if(dateMode === "pack"){
@@ -1235,10 +1254,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       });
     }
 
-    // Flat index so an edited header can be written back from anywhere.
+    // Flat index so an edited header can be written back from anywhere. The
+    // tint counter skips the title slide, which has no frame to colour, so the
+    // first event slide of every carousel still comes out pink.
     allSlides = [];
     decks.forEach(function(d){
-      d.slides.forEach(function(s){ s._s = allSlides.length; allSlides.push(s); });
+      var t = 0;
+      d.slides.forEach(function(s){
+        if(!s.cover) s.tint = TINTS[t++ % TINTS.length];
+        s._s = allSlides.length;
+        allSlides.push(s);
+      });
     });
     if(deckIdx >= decks.length) deckIdx = 0;
     idx = 0;
