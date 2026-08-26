@@ -331,7 +331,7 @@
 <main id="editor">
   <div class="card">
     <h1>Event Carousel</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 16</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 17</span></p>
 
     <label for="dateLabel">Date label (shown on slide header)</label>
     <input id="dateLabel" class="field" value="AUG 21 - 22" autocomplete="off">
@@ -1289,18 +1289,27 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   function curSlides(){ return curDeck().slides; }
   function deckCount(d){ return d.slides.reduce(function(a,s){ return a + s.items.length; }, 0); }
 
+  function plural(k, word){ return k + " " + word + (k === 1 ? "" : "s"); }
+
+  // A tab says what the post is rather than just a number: how many events it
+  // covers and how many slides that comes to. The slide count is the one that
+  // has to fit the platform's limit, so it earns its place beside the events.
+  function deckSummary(d){
+    return plural(deckCount(d), "event") + " · " + plural(d.slides.length, "slide");
+  }
+
   function renderTabs(){
     var bar = $("tabs");
     bar.innerHTML = "";
     if(decks.length < 2){
-      bar.innerHTML = '<span class="status">' + deckCount(curDeck()) + ' events</span>';
+      bar.innerHTML = '<span class="status">' + deckSummary(curDeck()) + '</span>';
       return;
     }
     decks.forEach(function(d,i){
       var b = document.createElement("button");
       b.type = "button";
       b.className = "day" + (i === deckIdx ? " on" : "");
-      b.innerHTML = esc(d.label) + ' <span class="n">' + deckCount(d) + '</span>';
+      b.innerHTML = esc(d.label) + ' <span class="n">' + deckSummary(d) + '</span>';
       b.onclick = function(){ deckIdx = i; idx = 0; render(); };
       bar.appendChild(b);
     });
@@ -1351,8 +1360,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     fit.innerHTML = slideHTML(s, s._s);
     showFooter(markClipped(fit), s);
     var n = curSlides().length;
-    $("status").textContent = "Slide " + (idx+1) + " of " + n
-      + (decks.length > 1 ? "" : "  \u00b7  " + deckCount(curDeck()) + " events");
+    $("status").textContent = "Slide " + (idx+1) + " of " + n;
     $("prev").disabled = n < 2;
     $("next").disabled = n < 2;
     renderTabs();
