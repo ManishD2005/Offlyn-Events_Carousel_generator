@@ -428,7 +428,7 @@
 <main id="editor">
   <div class="card">
     <h1>Offlyn &mdash; Events carousel generator</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 26</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 27</span></p>
 
     <div class="step"><span class="n">1</span> Your events</div>
 
@@ -440,9 +440,9 @@
       </div>
       <div class="cities">
         Keep a header row if you like &mdash; it's detected and used to label the columns below.
-        City can be a code (<b class="c-del">DEL</b>, <b class="c-blr">BLR</b>, <b class="c-bom">MUM</b>)
-        or a full name (Bengaluru, New Delhi, Mumbai); either way the code prints on the card.
-        A code we don't know works too &mdash; <b>JAI</b>, <b>COK</b> &mdash; it prints as typed.
+        City can be an airport code (<b class="c-del">DEL</b>, <b class="c-blr">BLR</b>, <b class="c-bom">BOM</b>)
+        or a full name (Bengaluru, New Delhi, Mumbai) &mdash; either way the code prints on the card.
+        Around 90 Indian cities are known. A code we don't have works too: it prints as typed.
         Dates are read from the sheet, so the slide headers write themselves.
       </div>
     </div>
@@ -986,39 +986,124 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   var PER_SLIDE = 9, W = 1080, H = 1350;
 
-  // Band colours. DEL / BLR / BOM are sampled from the approved slide.
-  // The rest are placeholders — swap the hex values when the real palette lands.
-  var CITIES = {
-    DEL:"#4E2FA6",
-    BLR:"#D270C1",
-    BOM:"#00B45A",
-    MUM:"#00B45A",
-    HYD:"#E8833A",
-    CHE:"#2E9BC4",
-    PUN:"#C2443D",
-    KOL:"#7A8B2E",
-    AHM:"#B0568C",
-    CHD:"#5B7C99",
-    PDY:"#C77B3A"
+  // Colours for the editor's preview chip only. The slide stopped using city
+  // colours when the band became a pin, so codes without one here are fine.
+  var CITY_TINT = {
+    DEL:"#4E2FA6", BLR:"#D270C1", BOM:"#00B45A", HYD:"#E8833A", MAA:"#2E9BC4",
+    PNQ:"#C2443D", CCU:"#7A8B2E", AMD:"#B0568C", IXC:"#5B7C99", PNY:"#C77B3A"
   };
   var FALLBACK = "#3F3B37";
 
-  // A sheet may hold "Bengaluru" or "BLR". Both resolve to the code shown on the band.
+  /* Codes are the city's airport, so a sheet can carry either "Bengaluru" or
+     "BLR" and both land on BLR. Where a place has no airport of its own it takes
+     the one it flies from: the whole NCR is DEL, Thane and Navi Mumbai are BOM.
+
+     Old house codes are kept as inputs and normalised, so a sheet still saying
+     MUM or CHE now prints BOM and MAA rather than two spellings of one city.
+     Anything absent from this table is passed through exactly as typed, which is
+     the escape hatch for a city we've missed — see cityCode. */
   var CITY_ALIASES = {
+    // The metros
+    "del":"DEL","delhi":"DEL","new delhi":"DEL","ncr":"DEL","gurgaon":"DEL","gurugram":"DEL",
+    "noida":"DEL","greater noida":"DEL","ghaziabad":"DEL","faridabad":"DEL","meerut":"DEL",
+    "bom":"BOM","mum":"BOM","mumbai":"BOM","bombay":"BOM","navi mumbai":"BOM","thane":"BOM",
+    "ulhasnagar":"BOM","kalyan":"BOM","panvel":"BOM",
     "blr":"BLR","bengaluru":"BLR","bangalore":"BLR",
-    "del":"DEL","delhi":"DEL","new delhi":"DEL","ncr":"DEL","gurgaon":"DEL","gurugram":"DEL","noida":"DEL",
-    "greater noida":"DEL","ghaziabad":"DEL","faridabad":"DEL",
-    "mum":"MUM","bom":"MUM","mumbai":"MUM","bombay":"MUM",
+    "maa":"MAA","che":"MAA","chennai":"MAA","madras":"MAA",
+    "ccu":"CCU","kol":"CCU","kolkata":"CCU","calcutta":"CCU","howrah":"CCU",
     "hyd":"HYD","hyderabad":"HYD","secunderabad":"HYD",
-    "che":"CHE","chennai":"CHE","madras":"CHE",
-    "pun":"PUN","pune":"PUN",
-    "kol":"KOL","kolkata":"KOL","calcutta":"KOL",
-    "ahm":"AHM","ahmedabad":"AHM",
-    "chd":"CHD","chandigarh":"CHD",
-    "pdy":"PDY","puducherry":"PDY","pondicherry":"PDY",
-    // Mumbai metropolitan region — shown as MUM. Split these out if you'd rather.
-    "navi mumbai":"MUM","thane":"MUM","ulhasnagar":"MUM","kalyan":"MUM"
+    "pnq":"PNQ","pun":"PNQ","pune":"PNQ","pimpri":"PNQ","pimpri chinchwad":"PNQ",
+    "amd":"AMD","ahm":"AMD","ahmedabad":"AMD","gandhinagar":"AMD",
+
+    // West
+    "goi":"GOI","goa":"GOI","panaji":"GOI","panjim":"GOI","vasco":"GOI",
+    "stv":"STV","surat":"STV",
+    "bdq":"BDQ","vadodara":"BDQ","baroda":"BDQ",
+    "raj":"RAJ","rajkot":"RAJ",
+    "bhj":"BHJ","bhuj":"BHJ",
+    "jga":"JGA","jamnagar":"JGA",
+    "isk":"ISK","nashik":"ISK","nasik":"ISK",
+    "ixu":"IXU","aurangabad":"IXU","sambhajinagar":"IXU",
+    "klh":"KLH","kolhapur":"KLH",
+    "ndc":"NDC","nanded":"NDC",
+
+    // North
+    "ixc":"IXC","chd":"IXC","chandigarh":"IXC","mohali":"IXC","panchkula":"IXC",
+    "atq":"ATQ","amritsar":"ATQ",
+    "luh":"LUH","ludhiana":"LUH",
+    "ixp":"IXP","pathankot":"IXP",
+    "sxr":"SXR","srinagar":"SXR",
+    "ixj":"IXJ","jammu":"IXJ",
+    "ixl":"IXL","leh":"IXL","ladakh":"IXL",
+    "slv":"SLV","shimla":"SLV",
+    "dhm":"DHM","dharamshala":"DHM","dharamsala":"DHM","mcleodganj":"DHM",
+    "kuu":"KUU","kullu":"KUU","manali":"KUU",
+    "ded":"DED","dehradun":"DED","mussoorie":"DED","rishikesh":"DED","haridwar":"DED",
+    "jai":"JAI","jaipur":"JAI",
+    "udr":"UDR","udaipur":"UDR",
+    "jdh":"JDH","jodhpur":"JDH",
+    "jsa":"JSA","jaisalmer":"JSA",
+    "bkb":"BKB","bikaner":"BKB",
+    "lko":"LKO","lucknow":"LKO",
+    "vns":"VNS","varanasi":"VNS","banaras":"VNS","benares":"VNS","kashi":"VNS",
+    "agr":"AGR","agra":"AGR",
+    "knu":"KNU","kanpur":"KNU",
+    "ixd":"IXD","prayagraj":"IXD","allahabad":"IXD",
+    "gop":"GOP","gorakhpur":"GOP",
+
+    // Central and east
+    "idr":"IDR","indore":"IDR",
+    "bho":"BHO","bhopal":"BHO",
+    "jlr":"JLR","jabalpur":"JLR",
+    "gwl":"GWL","gwalior":"GWL",
+    "nag":"NAG","nagpur":"NAG",
+    "rpr":"RPR","raipur":"RPR",
+    "pat":"PAT","patna":"PAT",
+    "gay":"GAY","gaya":"GAY","bodh gaya":"GAY",
+    "ixr":"IXR","ranchi":"IXR",
+    "ixw":"IXW","jamshedpur":"IXW",
+    "bbi":"BBI","bhubaneswar":"BBI","cuttack":"BBI","puri":"BBI",
+    "rdp":"RDP","durgapur":"RDP","asansol":"RDP",
+    "ixb":"IXB","bagdogra":"IXB","siliguri":"IXB","darjeeling":"IXB",
+    "pyg":"PYG","gangtok":"PYG","pakyong":"PYG","sikkim":"PYG",
+
+    // North east
+    "gau":"GAU","guwahati":"GAU","shillong road":"GAU",
+    "shl":"SHL","shillong":"SHL",
+    "dib":"DIB","dibrugarh":"DIB",
+    "jrh":"JRH","jorhat":"JRH",
+    "ixs":"IXS","silchar":"IXS",
+    "ixa":"IXA","agartala":"IXA",
+    "imf":"IMF","imphal":"IMF",
+    "ajl":"AJL","aizawl":"AJL",
+    "dmu":"DMU","dimapur":"DMU","kohima":"DMU",
+
+    // South
+    "cjb":"CJB","coimbatore":"CJB","kovai":"CJB",
+    "ixm":"IXM","madurai":"IXM",
+    "trz":"TRZ","tiruchirappalli":"TRZ","trichy":"TRZ",
+    "sxv":"SXV","salem":"SXV",
+    "tcr":"TCR","tuticorin":"TCR","thoothukudi":"TCR",
+    "pny":"PNY","pdy":"PNY","puducherry":"PNY","pondicherry":"PNY","pondy":"PNY",
+    "cok":"COK","kochi":"COK","cochin":"COK","ernakulam":"COK","fort kochi":"COK",
+    "trv":"TRV","thiruvananthapuram":"TRV","trivandrum":"TRV",
+    "ccj":"CCJ","kozhikode":"CCJ","calicut":"CCJ",
+    "cnn":"CNN","kannur":"CNN",
+    "ixe":"IXE","mangaluru":"IXE","mangalore":"IXE",
+    "myq":"MYQ","mysuru":"MYQ","mysore":"MYQ",
+    "hbx":"HBX","hubli":"HBX","hubballi":"HBX","dharwad":"HBX",
+    "ixg":"IXG","belagavi":"IXG","belgaum":"IXG",
+    "vtz":"VTZ","visakhapatnam":"VTZ","vizag":"VTZ",
+    "vga":"VGA","vijayawada":"VGA",
+    "tir":"TIR","tirupati":"TIR",
+    "rja":"RJA","rajahmundry":"RJA",
+    "cdp":"CDP","kadapa":"CDP","cuddapah":"CDP",
+    "ixz":"IXZ","port blair":"IXZ","andaman":"IXZ"
   };
+
+  // Derived, so adding a spelling above never has to be registered twice.
+  var CITIES = {};
+  Object.keys(CITY_ALIASES).forEach(function(k){ CITIES[CITY_ALIASES[k]] = 1; });
   // "9:30 AM – 11:45 AM" -> "9:30 AM".  "19:00" -> "7:00 PM".
   function startTime(v){
     var s = String(v||"").trim();
@@ -1197,10 +1282,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return m;
   }
 
+  /* Place names that are also ordinary words or common given names. They stay
+     perfectly valid in the City cell, where you clearly meant the city, but the
+     fallback scan reads venue and host text where they mean something else:
+     "Chole Puri Corner" is a breakfast place, not Odisha, and "Kashi Art Cafe"
+     is in Kochi. */
+  var SCAN_SKIP = { "puri":1, "kalyan":1, "kashi":1, "manali":1, "vasco":1 };
+
   // Whole-word patterns for the fallback scan. Built once; bare codes are left
   // out because two or three letters match far too much running text.
   var CITY_SCAN = Object.keys(CITY_ALIASES)
-    .filter(function(name){ return name.length >= 4; })
+    .filter(function(name){ return name.length >= 4 && !SCAN_SKIP[name]; })
     .map(function(name){
       return {
         code: CITY_ALIASES[name],
@@ -1799,7 +1891,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     reportCities(all);
     if(!e){ box.innerHTML = "No usable rows yet."; return; }
     box.innerHTML = "First card will read: "
-      + '<span class="band" style="background:' + (CITIES[e.city] || FALLBACK) + '">' + (esc(e.city) || "?") + '</span>'
+      + '<span class="band" style="background:' + (CITY_TINT[e.city] || FALLBACK) + '">' + (esc(e.city) || "?") + '</span>'
       + "<b>" + esc(e.title) + "</b>"
       + (e.time ? " &middot; " + esc(e.time) : "")
       + (e.host ? " &middot; " + esc(e.host) : "");

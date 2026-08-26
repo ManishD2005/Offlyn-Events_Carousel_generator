@@ -161,9 +161,18 @@ The mapper reads four fields. It recognises them by header name and by content:
 | City | `City` | `Bengaluru` → `BLR`. Falls back to scanning the address |
 | Date | `Date` | Accepts `2026-08-28`, `28/08/2026`, `28 Aug 2026`, `Aug 28, 2026` |
 
-Known city codes live in one object near the top of the app script (`CITIES`),
-with the spellings that resolve to them in `CITY_ALIASES` just below. Mumbai
-resolves to `MUM`; change that entry if you want `BOM` on the cards instead.
+Codes are the city's **IATA airport code**, so `Mumbai` and `BOM` and `MUM` all
+print `BOM`. The table carries 83 codes across about 240 spellings, in
+`CITY_ALIASES` near the top of the app script; `CITIES` is derived from it, so a
+new spelling is one line in one place.
+
+> **This changed the old codes.** `MUM` is now `BOM`, `CHE` is `MAA`, `KOL` is
+> `CCU`, `PUN` is `PNQ`, `AHM` is `AMD`, `CHD` is `IXC`, `PDY` is `PNY`. The old
+> spellings still work as input — they just normalise. Sheets need no edit;
+> cards exported before this will differ from ones exported after.
+
+Places without their own airport take the one they fly from: the whole NCR is
+`DEL`, Thane and Navi Mumbai are `BOM`, Secunderabad is `HYD`, Howrah is `CCU`.
 
 A city is resolved in two steps. The mapped City cell is looked up in
 `CITY_ALIASES` first, matched whole and case-insensitively. If that yields
