@@ -223,7 +223,7 @@ both. Anything that looks right on screen but wrong in the export is worth
 suspecting there first — the rule of thumb is that it agrees on the box model
 and disagrees on everything that crops or distributes.
 
-TAN Harmoni and Figtree are embedded as base64 woff2, so the app renders
+TAN Harmoni, Figtree and DM Sans are embedded as base64 woff2, so the app renders
 identically offline and exports never fall back to a substitute font. The
 background texture is embedded the same way, which is most of the file's size.
 
