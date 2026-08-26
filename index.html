@@ -123,6 +123,12 @@
 
   .coverbox{margin:22px 0 0}
   .coverbox .hint{font-weight:500;color:var(--muted)}
+  .coverbox .check{padding:0;margin-bottom:9px}
+  .fillwrap{margin-top:2px}
+  .fillwrap textarea.field{height:104px}
+  .fillnote{margin:9px 0 0;font-size:12.5px;color:var(--muted)}
+  .fillnote b{color:var(--ink);font-weight:600}
+  .fillwrap[hidden]{display:none}
   .cover-have{
     display:flex;align-items:center;gap:14px;margin-top:12px;padding:12px 14px;
     background:#F5F1E8;border-radius:13px;
@@ -268,6 +274,28 @@
   .ev-host{top:228px}
   .ev-meta:empty{display:none}
 
+  /* A filler card is deliberately not an event: brand purple against whatever
+     tint the frame is wearing, with the sans for the words and the display
+     face kept to the ornament, since a review is a sentence, not a headline. */
+  .ev.quote{
+    background:#4E2FA6;color:#fff;
+    display:flex;flex-direction:column;justify-content:center;
+  }
+  .ev.quote.has-by{padding-bottom:54px}      /* room for the pinned credit */
+  .q-mark{
+    font-family:var(--display);font-size:76px;line-height:.72;height:44px;margin:0 0 4px;
+    color:rgba(255,255,255,.5);
+  }
+  .q-text{
+    font-size:27px;line-height:31px;font-weight:500;margin:0;
+    display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .q-by{
+    position:absolute;left:19px;right:19px;bottom:19px;margin:0;
+    font-size:19px;line-height:1.2;color:rgba(255,255,255,.75);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+
   /* The uploaded title slide, cropped to fill the same 4:5 frame. */
   .slide.cover{padding:0;overflow:hidden}
   .slide.cover img{width:100%;height:100%;object-fit:cover;display:block}
@@ -275,9 +303,10 @@
   [data-f]{outline:none;border-radius:4px}
   [data-f]:hover{box-shadow:0 0 0 2px rgba(124,58,237,.28)}
   [data-f]:focus{box-shadow:0 0 0 2px var(--violet)}
-  .ev-title.clipped{box-shadow:inset 0 -2px 0 #E0A030}
+  .ev-title.clipped,.q-text.clipped{box-shadow:inset 0 -2px 0 #E0A030}
   .ev-city .code:empty::after{content:"?";opacity:.25}
-  .ev-title.clipped:hover,.ev-title.clipped:focus{box-shadow:0 0 0 2px var(--violet), inset 0 -2px 0 #E0A030}
+  .ev-title.clipped:hover,.ev-title.clipped:focus,
+  .q-text.clipped:hover,.q-text.clipped:focus{box-shadow:0 0 0 2px var(--violet), inset 0 -2px 0 #E0A030}
   .pill:disabled{opacity:.5;cursor:default}
   .busy{color:#B9B9B3;font-size:13px}
   .tabs-row{gap:8px}
@@ -331,7 +360,7 @@
 <main id="editor">
   <div class="card">
     <h1>Event Carousel</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 17</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 18</span></p>
 
     <label for="dateLabel">Date label (shown on slide header)</label>
     <input id="dateLabel" class="field" value="AUG 21 - 22" autocomplete="off">
@@ -388,6 +417,22 @@
         <img id="coverThumb" alt="">
         <div class="cover-meta"><b id="coverName"></b><span id="coverDim"></span></div>
         <button class="btn-ghost sm" id="coverClear" type="button">Remove</button>
+      </div>
+    </div>
+
+    <div class="coverbox">
+      <label class="check" for="fillOn">
+        <input type="checkbox" id="fillOn">
+        Fill leftover card slots with quotes or reviews
+      </label>
+      <div class="fillwrap" id="fillWrap" hidden>
+        <textarea id="fillText" class="field" spellcheck="false"
+          placeholder="Best pop-up I&#39;ve been to all year | Priya, Bengaluru&#10;Come for the food, stay for the people"></textarea>
+        <div class="row" style="margin:10px 0 0">
+          <button class="btn-upload" id="fillBtn" type="button">Upload .txt or .csv</button>
+        </div>
+        <input type="file" id="fillFile" accept=".csv,.txt,text/csv,text/plain" hidden>
+        <p class="fillnote" id="fillNote"></p>
       </div>
     </div>
 
@@ -959,6 +1004,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   var csvEl=$("csv"), dateEl=$("dateLabel"), dateLive=$("dateLive"), errEl=$("err"), goBtn=$("go");
   var events=[], decks=[], allSlides=[], deckIdx=0, idx=0;
   var cover = null;                       // the uploaded title slide, as a data URL
+  var fillers = [];                       // quotes for the leftover card slots
 
   /* ── CSV parsing (handles quoted fields) ───────────────── */
   function parseLine(line){
@@ -1167,9 +1213,43 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       + '</article>';
   }
 
+  // One entry per line. A pipe separates the words from whoever said them; a
+  // line without one is just the words. Surrounding quote marks are stripped so
+  // a pasted review doesn't end up quoted twice on the card.
+  function parseFillers(text){
+    return String(text || "").replace(/\r/g, "").split("\n").map(function(line){
+      var t = line.trim(), by = "", cut = t.indexOf("|"), f;
+      if(!t) return null;
+      if(cut > -1){
+        by = t.slice(cut + 1).trim();
+        t  = t.slice(0, cut).trim();
+      } else if(t.charAt(0) === '"'){
+        f = parseLine(t);                       // "quote, with a comma",Author
+        if(f.length > 1 && f[1]){ t = f[0]; by = f[1]; }
+      }
+      t = t.replace(/^["“]\s*/, "").replace(/\s*["”]$/, "");
+      return t ? { text: t, by: by } : null;
+    }).filter(Boolean);
+  }
+
+  // Cards land three to a row, so a slide leaves 0, 1 or 2 slots spare.
+  function emptyCells(count){
+    return count ? Math.ceil(count / 3) * 3 - count : 0;
+  }
+
+  function fillHTML(f, si, k){
+    var at = ' data-i="' + si + ':' + k + '" contenteditable="true" spellcheck="false"';
+    return '<article class="ev quote' + (f.by ? " has-by" : "") + '">'
+      + '<p class="q-mark" aria-hidden="true">“</p>'
+      + '<p class="q-text" data-f="fill"' + at + '>' + esc(f.text) + '</p>'
+      + (f.by ? '<p class="q-by" data-f="fillby"' + at + '>' + esc(f.by) + '</p>' : "")
+      + '</article>';
+  }
+
   function slideHTML(slide, si){
     if(slide.cover) return '<div class="slide cover"><img src="' + slide.src + '" alt="Title slide"></div>';
     var cards = slide.items.map(cardHTML).join("");
+    (slide.fills || []).forEach(function(f, k){ cards += fillHTML(f, si, k); });
     var rows = Math.max(1, Math.ceil(slide.items.length / 3)), fh = frameHeight(slide.items.length);
     return '<div class="slide">'
       + '<div class="s-top">'
@@ -1273,10 +1353,19 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     // tint counter skips the title slide, which has no frame to colour, so the
     // first event slide of every carousel still comes out pink.
     allSlides = [];
+    var fi = 0;
     decks.forEach(function(d){
       var t = 0;
       d.slides.forEach(function(s){
         if(!s.cover) s.tint = TINTS[t++ % TINTS.length];
+        // Handed out in order across the whole run, so nothing repeats until
+        // the supplied list has been used up.
+        s.fills = [];
+        if(!s.cover && fillers.length){
+          for(var g = emptyCells(s.items.length); g > 0; g--){
+            s.fills.push(fillers[fi++ % fillers.length]);
+          }
+        }
         s._s = allSlides.length;
         allSlides.push(s);
       });
@@ -1330,7 +1419,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   // Every title renders at one size. Anything past two lines is clipped and flagged
   // on screen so it can be shortened by hand.
   function markClipped(root){
-    var els = root.querySelectorAll(".ev-title"), n = 0;
+    var els = root.querySelectorAll(".ev-title, .q-text"), n = 0;
     for(var i=0;i<els.length;i++){
       var over = els[i].scrollHeight > els[i].clientHeight + 1;
       els[i].classList.toggle("clipped", over);
@@ -1346,8 +1435,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     $("hintline").hidden = !!count;
     if(count){
       $("warn").textContent = count === 1
-        ? "1 title is too long — click to shorten it"
-        : count + " titles are too long — click to shorten them";
+        ? "1 entry is too long — click to shorten it"
+        : count + " entries are too long — click to shorten them";
     } else {
       $("hintline").textContent = slide.cover
         ? "Title slide — the image you uploaded, exported as slide 1"
@@ -1553,6 +1642,30 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   });
   coverBtn.addEventListener("drop", function(e){ loadCover(e.dataTransfer.files[0]); });
 
+  /* -- Filler cards ------------------------------------------- */
+  function showFillers(){
+    var k = parseFillers($("fillText").value).length;
+    $("fillNote").innerHTML = k
+      ? "<b>" + plural(k, "quote") + "</b> ready · used in order, and reused if there are more gaps than quotes"
+      : "One per line. Add <b>| a name</b> after a quote to credit it.";
+  }
+
+  $("fillOn").onchange = function(){
+    $("fillWrap").hidden = !this.checked;
+    if(this.checked) $("fillText").focus();
+  };
+  $("fillText").addEventListener("input", showFillers);
+  $("fillBtn").onclick = function(){ $("fillFile").click(); };
+  $("fillFile").onchange = function(e){
+    var f = e.target.files[0];
+    if(!f) return;
+    var r = new FileReader();
+    r.onload = function(){ $("fillText").value = r.result; showFillers(); };
+    r.onerror = function(){ errEl.textContent = "Couldn't read that file."; };
+    r.readAsText(f);
+    $("fillFile").value = "";
+  };
+
   goBtn.onclick = function(){
     analyse(csvEl.value);
     events = buildEvents(currentMapping());
@@ -1561,6 +1674,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       errEl.textContent = "No rows found — check that the Event title column is mapped correctly.";
       return;
     }
+    fillers = $("fillOn").checked ? parseFillers($("fillText").value) : [];
     errEl.textContent = "";
     dateLive.value = dateEl.value;
     deckIdx = 0;
@@ -1579,7 +1693,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   // Jump straight into the first over-long title with the caret at the end,
   // which is where you'd start deleting from anyway.
   $("warn").onclick = function(){
-    var el = fit.querySelector(".ev-title.clipped");
+    var el = fit.querySelector(".ev-title.clipped, .q-text.clipped");
     if(!el) return;
     el.focus();
     var range = document.createRange();
@@ -1692,6 +1806,19 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
   }
 
+  // The same problem sideways: text-overflow doesn't survive the rasteriser on
+  // an absolutely positioned box, so a long credit would be sliced mid-letter
+  // at the card edge instead of ellipsised.
+  function trimWide(el){
+    var full = el.textContent, lo = 0, hi = full.length, mid;
+    while(lo < hi){
+      mid = Math.ceil((lo + hi) / 2);
+      el.textContent = full.slice(0, mid).replace(/\s+$/,"") + "…";
+      if(el.scrollWidth > el.clientWidth + 1) hi = mid - 1; else lo = mid;
+    }
+    el.textContent = full.slice(0, lo).replace(/\s+$/,"") + "…";
+  }
+
   // Render one slide into a detached, unscaled node and rasterise it.
   function shoot(slide){
     if(slide.cover) return shootCover(slide.src);
@@ -1704,10 +1831,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
     // Export-only cleanup: the on-screen clipped marker must never print, and
     // html2canvas draws box-shadow as a hard grey band, so drop it.
-    var i, titles = holder.querySelectorAll(".ev-title");
-    for(i=0;i<titles.length;i++){
-      titles[i].classList.remove("clipped");
-      if(titles[i].scrollHeight > titles[i].clientHeight + 1) trimToFit(titles[i]);
+    var i, clamped = holder.querySelectorAll(".ev-title, .q-text");
+    for(i=0;i<clamped.length;i++){
+      clamped[i].classList.remove("clipped");
+      if(clamped[i].scrollHeight > clamped[i].clientHeight + 1) trimToFit(clamped[i]);
+    }
+    var wide = holder.querySelectorAll(".q-by, .ev-meta");
+    for(i=0;i<wide.length;i++){
+      if(wide[i].scrollWidth > wide[i].clientWidth + 1) trimWide(wide[i]);
     }
     var cards = holder.querySelectorAll(".ev");
     for(i=0;i<cards.length;i++) cards[i].style.boxShadow = "none";
@@ -1788,13 +1919,19 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     if(isNaN(i)) return;
     var val = el.textContent.replace(/\s+/g, " ").trim();
     if(f === "label"){ if(allSlides[i]) allSlides[i].label = val; return; }
+    if(f === "fill" || f === "fillby"){
+      // data-i is "<slide>:<slot>" here, and parseInt already gave us the slide.
+      var slot = allSlides[i] && allSlides[i].fills[+el.getAttribute("data-i").split(":")[1]];
+      if(slot) slot[f === "fill" ? "text" : "by"] = val;
+      return;
+    }
     if(!events[i]) return;
     if(f === "city"){
       events[i].city = cityCode(val);
     } else {
       events[i][f] = val;
     }
-    if(f === "title") showFooter(markClipped(fit), curSlides()[idx]);
+    if(f === "title" || f === "fill") showFooter(markClipped(fit), curSlides()[idx]);
   });
 
   // Single-line fields: Enter commits, paste arrives as plain text.
@@ -1821,6 +1958,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   window.addEventListener("resize", scale);
   showCover();
+  showFillers();
   checkReady();
 })();
 </script>

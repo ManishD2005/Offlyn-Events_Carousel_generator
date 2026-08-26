@@ -11,6 +11,7 @@ Turns a CSV of events into branded Offlyn slide carousels, ready to post.
   to fill a slide merge into the next date rather than going out half empty.
 - Renders 4:5 slides (1080×1350) with up to 9 event cards each, matching the Offlyn brand.
 - Upload a title slide as a PNG — it leads every carousel as slide 1.
+- Optionally fill the leftover card slots with quotes or reviews.
 - Exports per day: PDF, a zip of PNGs, or a single slide as PNG.
 - Click any text on a slide to edit it before exporting. A title too long for
   three lines is flagged under the slide, and the flag is the button that puts
@@ -45,6 +46,32 @@ slide 1 of every carousel, ahead of the event slides. It's drawn straight onto
 the 1080×1350 canvas rather than going through html2canvas, so a 4:5 image
 exports pixel-for-pixel; anything else is cropped to fill, and the uploader says
 so before you generate.
+
+## Filler cards
+
+A slide holds nine cards, so the last one usually has a slot or two spare. Tick
+**Fill leftover card slots** in the editor and those go to quotes or reviews
+instead of empty space. Leave it off and nothing changes.
+
+One entry per line, pasted into the box or loaded from a `.txt` / `.csv`:
+
+```
+Best pop-up I've been to all year | Priya, Bengaluru
+Come for the food, stay for the people
+"Genuinely, the nicest crowd, hands down",Rahul M.
+```
+
+A pipe separates the words from whoever said them, and a line without one is
+just the words. A line that starts with a quote mark is read as CSV instead, so
+a review containing commas survives. Surrounding quote marks are stripped —
+the card adds its own.
+
+Entries are handed out in order across the whole run, so nothing repeats until
+the list is used up; past that it wraps. Like everything else on a slide, a
+filler can be edited in place before exporting.
+
+They are capped at five lines and the credit to one, both trimmed with an
+ellipsis on export.
 
 ## Export naming
 
@@ -103,6 +130,10 @@ than scaled — the frame really does start at x 49, y 356.
   a carousel's slides and wraps round if there are more than five, so a post
   reads as a sequence. Each carousel restarts at pink. The order lives in
   `TINTS`; the title slide is skipped, since it has no frame to colour.
+- **Filler cards.** Brand purple against whatever tint the frame is wearing, so
+  they read as deliberate rather than as an event that lost its details. The
+  display face is kept to the quote mark, since a review is a sentence and not
+  a headline.
 - **Cards.** Fixed 293×285 with a 5px radius. The time and host chips are
   positioned absolutely rather than flowed, so a one-line title never lifts them
   out of the rhythm the grid reads by.
@@ -119,6 +150,12 @@ empty, Output Directory `.` (root). Every push to `main` redeploys.
 Everything lives in `index.html`: styles in the `<style>` block, app logic in the
 last `<script>` block. The three earlier `<script>` blocks are vendored
 libraries (jsPDF, JSZip, html2canvas) — leave them alone.
+
+html2canvas honours neither `-webkit-line-clamp` nor `text-overflow` reliably,
+so anything that has to fit is measured and trimmed by hand before rasterising:
+`trimToFit` for the multi-line fields, `trimWide` for the single-line ones. If
+you add a field that clips on screen, add it to those selectors in `shoot()` or
+it will render in full and spill out of its card.
 
 TAN Harmoni and Figtree are embedded as base64 woff2, so the app renders
 identically offline and exports never fall back to a substitute font. The
