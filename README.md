@@ -11,7 +11,8 @@ Turns a CSV of events into branded Offlyn slide carousels, ready to post.
   to fill a slide merge into the next date rather than going out half empty.
 - Renders 4:5 slides (1080×1350) with up to 9 event cards each, matching the Offlyn brand.
 - Upload a title slide as a PNG — it leads every carousel as slide 1.
-- Optionally fill the leftover card slots with quotes or reviews.
+- Optionally fill the leftover card slots with quotes, or with the app's own
+  4★-and-up App Store reviews. Nothing is used twice.
 - Exports per day: PDF, a zip of PNGs, or a single slide as PNG.
 - Click any text on a slide to edit it before exporting. A title too long for
   three lines is flagged under the slide, and the flag is the button that puts
@@ -66,12 +67,46 @@ just the words. A line that starts with a quote mark is read as CSV instead, so
 a review containing commas survives. Surrounding quote marks are stripped —
 the card adds its own.
 
-Entries are handed out in order across the whole run, so nothing repeats until
-the list is used up; past that it wraps. Like everything else on a slide, a
+Entries are handed out in order and never twice — see below. Once the pool runs
+out the leftover slots simply stay empty. Like everything else on a slide, a
 filler can be edited in place before exporting.
 
 They are capped at five lines and the credit to one, both trimmed with an
 ellipsis on export.
+
+### App Store reviews
+
+With **Top up from App Store reviews** ticked, the page reads Offlyn's own
+review feed and queues 4★-and-up reviews behind whatever you typed, so they only
+get used once your own list runs out. Reviews shorter than 10 or longer than 150
+characters are skipped, which is what keeps them card-sized.
+
+Apple's feed sends `Access-Control-Allow-Origin`, so this needs no server. The
+app and storefront are set near the top of the app script:
+
+```js
+var APP_STORE_ID = "6743385430", APP_STORE_COUNTRY = "in", STORE_MAX = 150;
+```
+
+Reviews are per storefront — `in` is where Offlyn's are. If the fetch fails the
+note says so and the typed list carries on working.
+
+**Google Play is not wired up.** It publishes no CORS-enabled review feed, so a
+browser cannot read it; the official API covers only apps you own and needs a
+service account. Adding Play means a small serverless function to fetch it
+server-side. Offlyn is `club.offlyn.experience` when that happens.
+
+### Nothing gets used twice
+
+Exporting records the fillers that were on the exported slides, so a review that
+went out in one post won't turn up in the next. Seeing a quote on screen doesn't
+spend it — only exporting does — so you can regenerate freely while deciding.
+
+The history lives in `localStorage` under `offlyn.fillers.used`, keyed on the
+words themselves. That makes it per-browser: it survives reloads but not a
+different machine, and clearing site data starts the pool over. **Reset history**
+in the editor does the same deliberately, and only appears once there's
+something to reset. Editing a quote's wording makes it count as a new one.
 
 ## Export naming
 

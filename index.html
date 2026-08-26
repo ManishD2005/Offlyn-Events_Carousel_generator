@@ -126,6 +126,7 @@
   .coverbox .check{padding:0;margin-bottom:9px}
   .fillwrap{margin-top:2px}
   .fillwrap textarea.field{height:104px}
+  .coverbox .check.store{margin:14px 0 0;font-weight:500;color:var(--muted)}
   .fillnote{margin:9px 0 0;font-size:12.5px;color:var(--muted)}
   .fillnote b{color:var(--ink);font-weight:600}
   .fillwrap[hidden]{display:none}
@@ -360,7 +361,7 @@
 <main id="editor">
   <div class="card">
     <h1>Event Carousel</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 18</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 19</span></p>
 
     <label for="dateLabel">Date label (shown on slide header)</label>
     <input id="dateLabel" class="field" value="AUG 21 - 22" autocomplete="off">
@@ -430,8 +431,13 @@
           placeholder="Best pop-up I&#39;ve been to all year | Priya, Bengaluru&#10;Come for the food, stay for the people"></textarea>
         <div class="row" style="margin:10px 0 0">
           <button class="btn-upload" id="fillBtn" type="button">Upload .txt or .csv</button>
+          <button class="btn-ghost sm" id="fillReset" type="button" hidden>Reset history</button>
         </div>
         <input type="file" id="fillFile" accept=".csv,.txt,text/csv,text/plain" hidden>
+        <label class="check store" for="fillStore">
+          <input type="checkbox" id="fillStore" checked>
+          Top up from App&nbsp;Store reviews (4&#9733; and up) when these run out
+        </label>
         <p class="fillnote" id="fillNote"></p>
       </div>
     </div>
@@ -1232,6 +1238,89 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }).filter(Boolean);
   }
 
+  /* -- Filler history ----------------------------------------
+     A review that has gone out in one post shouldn't turn up in the next, so
+     exporting records what was on the slides. It lives in localStorage, which
+     makes it per-browser: clearing site data starts the pool over, as does the
+     Reset button. Keyed on the words themselves, so an edited quote counts as
+     a new one. */
+  var USED_KEY = "offlyn.fillers.used";
+  var usedFillers = {};
+
+  function fillKey(f){ return String(f.text || "").toLowerCase().replace(/\s+/g, " ").trim(); }
+
+  function loadUsed(){
+    usedFillers = {};
+    try {
+      var raw = JSON.parse(localStorage.getItem(USED_KEY) || "[]");
+      if(raw && raw.length){ for(var i=0;i<raw.length;i++) usedFillers[raw[i]] = 1; }
+    } catch(e){ /* private window, or something else in the slot; start empty */ }
+  }
+
+  function saveUsed(){
+    try { localStorage.setItem(USED_KEY, JSON.stringify(Object.keys(usedFillers))); }
+    catch(e){ /* nothing to do — the pool just won't survive a reload */ }
+  }
+
+  // Called once an export actually lands, not when slides are built: seeing a
+  // quote on screen shouldn't burn it, publishing it should.
+  function markUsed(slides){
+    var before = Object.keys(usedFillers).length;
+    slides.forEach(function(s){
+      (s.fills || []).forEach(function(f){ usedFillers[fillKey(f)] = 1; });
+    });
+    if(Object.keys(usedFillers).length !== before){ saveUsed(); showFillers(); }
+  }
+
+  /* -- App Store reviews --------------------------------------
+     Apple's review feed sends Access-Control-Allow-Origin, so the page can read
+     it with no server in the way. Google Play sends none, which is the only
+     reason this is one store and not two. Reviews are per storefront. */
+  var APP_STORE_ID = "6743385430", APP_STORE_COUNTRY = "in", STORE_MAX = 150;
+  var storeFillers = [], storeState = "";
+
+  function loadStoreReviews(){
+    if(storeState === "loading" || storeState === "ok") return;
+    storeState = "loading";
+    showFillers();
+    fetch("https://itunes.apple.com/" + APP_STORE_COUNTRY + "/rss/customerreviews/id="
+          + APP_STORE_ID + "/sortBy=mostRecent/json")
+      .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function(d){
+        var e = (d.feed && d.feed.entry) || [];
+        if(e && e["im:rating"]) e = [e];          // a lone review arrives unwrapped
+        storeFillers = [];
+        for(var i=0;i<e.length;i++){
+          var x = e[i];
+          if(!x || !x["im:rating"]) continue;      // the feed's own header rows
+          if(+x["im:rating"].label < 4) continue;
+          var t = String((x.content && x.content.label) || "").replace(/\s+/g, " ").trim();
+          // Long enough to say something, short enough to sit in a card.
+          if(t.length < 10 || t.length > STORE_MAX) continue;
+          storeFillers.push({
+            text: t,
+            by: String((x.author && x.author.name && x.author.name.label) || "").trim()
+          });
+        }
+        storeState = "ok";
+        showFillers();
+      })
+      .catch(function(){ storeState = "fail"; showFillers(); });
+  }
+
+  // Typed quotes first, store reviews behind them: the feed is a backstop for
+  // when the list runs out, not the first choice.
+  function fillerPool(){
+    var pool = parseFillers($("fillText").value);
+    if($("fillStore").checked) pool = pool.concat(storeFillers);
+    var seen = {}, out = [];
+    pool.forEach(function(f){
+      var k = fillKey(f);
+      if(k && !seen[k]){ seen[k] = 1; out.push(f); }
+    });
+    return out;
+  }
+
   // Cards land three to a row, so a slide leaves 0, 1 or 2 slots spare.
   function emptyCells(count){
     return count ? Math.ceil(count / 3) * 3 - count : 0;
@@ -1358,12 +1447,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       var t = 0;
       d.slides.forEach(function(s){
         if(!s.cover) s.tint = TINTS[t++ % TINTS.length];
-        // Handed out in order across the whole run, so nothing repeats until
-        // the supplied list has been used up.
+        // Handed out in order across the whole run.
         s.fills = [];
-        if(!s.cover && fillers.length){
-          for(var g = emptyCells(s.items.length); g > 0; g--){
-            s.fills.push(fillers[fi++ % fillers.length]);
+        if(!s.cover){
+          // No wrapping: the index only moves forward, so a run never repeats
+          // itself, and gaps past the end of the pool simply stay empty.
+          for(var g = emptyCells(s.items.length); g > 0 && fi < fillers.length; g--){
+            s.fills.push(fillers[fi++]);
           }
         }
         s._s = allSlides.length;
@@ -1479,6 +1569,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if(i >= list.length){
         setBusy("Saving\u2026");
         pdf.save(name);
+        markUsed(list);
         setBusy("");
         return;
       }
@@ -1644,15 +1735,39 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   /* -- Filler cards ------------------------------------------- */
   function showFillers(){
-    var k = parseFillers($("fillText").value).length;
-    $("fillNote").innerHTML = k
-      ? "<b>" + plural(k, "quote") + "</b> ready · used in order, and reused if there are more gaps than quotes"
+    var pool = fillerPool(), left = 0, spent = 0, bits = [];
+    pool.forEach(function(f){ if(usedFillers[fillKey(f)]) spent++; else left++; });
+
+    if(pool.length) bits.push("<b>" + plural(left, "quote") + "</b> ready");
+    if(spent) bits.push(spent + " already posted");
+    if($("fillStore").checked){
+      // Counted after the history, so a drained feed doesn't advertise itself.
+      var fromStore = storeFillers.filter(function(f){ return !usedFillers[fillKey(f)]; }).length;
+      if(storeState === "loading")   bits.push("checking the App Store…");
+      else if(storeState === "fail") bits.push("couldn't reach the App Store");
+      else if(fromStore)             bits.push(fromStore + " from the App Store");
+    }
+    if(pool.length && !left) bits.push("add more, or reset, to keep filling");
+    $("fillNote").innerHTML = bits.length ? bits.join(" · ")
       : "One per line. Add <b>| a name</b> after a quote to credit it.";
+    $("fillReset").hidden = !spent;
   }
 
   $("fillOn").onchange = function(){
     $("fillWrap").hidden = !this.checked;
-    if(this.checked) $("fillText").focus();
+    if(this.checked){
+      $("fillText").focus();
+      if($("fillStore").checked) loadStoreReviews();
+    }
+  };
+  $("fillStore").onchange = function(){
+    if(this.checked) loadStoreReviews();
+    showFillers();
+  };
+  $("fillReset").onclick = function(){
+    usedFillers = {};
+    saveUsed();
+    showFillers();
   };
   $("fillText").addEventListener("input", showFillers);
   $("fillBtn").onclick = function(){ $("fillFile").click(); };
@@ -1674,7 +1789,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       errEl.textContent = "No rows found — check that the Event title column is mapped correctly.";
       return;
     }
-    fillers = $("fillOn").checked ? parseFillers($("fillText").value) : [];
+    fillers = $("fillOn").checked
+      ? fillerPool().filter(function(f){ return !usedFillers[fillKey(f)]; })
+      : [];
     errEl.textContent = "";
     dateLive.value = dateEl.value;
     deckIdx = 0;
@@ -1872,6 +1989,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     setBusy("Rendering\u2026");
     shoot(s).then(toBlob).then(function(blob){
       download(blob, deckBase(curDeck()) + "-" + (idx+1) + ".png");
+      markUsed([s]);
       setBusy("");
     }).catch(function(err){
       setBusy("");
@@ -1889,6 +2007,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         setBusy("Zipping\u2026");
         return zip.generateAsync({type:"blob"}).then(function(blob){
           download(blob, base + ".zip");
+          markUsed(list);
           setBusy("");
         });
       }
@@ -1958,6 +2077,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   window.addEventListener("resize", scale);
   showCover();
+  loadUsed();
+  if($("fillOn").checked && $("fillStore").checked) loadStoreReviews();
   showFillers();
   checkReady();
 })();
