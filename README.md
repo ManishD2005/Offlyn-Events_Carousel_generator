@@ -69,14 +69,22 @@ the card adds its own.
 
 A slide takes at most one filler. One spare slot gets a card its own size; two
 spare slots — always side by side, being the tail of the last row — get a single
-card across both, set larger, rather than one thought split in half.
+card across both, rather than one thought split in half. Only the width changes:
+type stays at one size everywhere on the slide.
+
+Which quote lands where is decided by fit, not by order. The pool is split by
+what actually fits a narrow card — measured against the real card metrics, not
+counted in characters — and the long ones are steered to the wide slots. Order
+inside each group is untouched, so typed quotes still come out ahead of App
+Store ones. A review too long for the slot it ends up in is trimmed, but that
+only happens once the better-fitting group is empty.
 
 Entries are handed out in order and never twice — see below. Once the pool runs
 out the leftover slots simply stay empty. Like everything else on a slide, a
 filler can be edited in place before exporting.
 
-Quotes are capped at five lines in a normal card and four in a wide one, the
-credit at one line, all trimmed with an ellipsis on export.
+Quotes are capped at five lines and the credit at one, both trimmed with an
+ellipsis on export.
 
 ### App Store reviews
 
@@ -169,6 +177,8 @@ than scaled — the frame really does start at x 49, y 356.
   a carousel's slides and wraps round if there are more than five, so a post
   reads as a sequence. Each carousel restarts at pink. The order lives in
   `TINTS`; the title slide is skipped, since it has no frame to colour.
+- **One type scale.** Every card on a slide sets its text at the same size,
+  whatever its width. A wide card is more room, not a bigger headline.
 - **Filler cards.** Brand purple against whatever tint the frame is wearing, so
   they read as deliberate rather than as an event that lost its details. The
   display face is kept to the quote mark, since a review is a sentence and not
@@ -195,6 +205,11 @@ so anything that has to fit is measured and trimmed by hand before rasterising:
 `trimToFit` for the multi-line fields, `trimWide` for the single-line ones. If
 you add a field that clips on screen, add it to those selectors in `shoot()` or
 it will render in full and spill out of its card.
+
+It ignores `overflow: hidden` and `justify-content` too, so the slide avoids
+both. Anything that looks right on screen but wrong in the export is worth
+suspecting there first — the rule of thumb is that it agrees on the box model
+and disagrees on everything that crops or distributes.
 
 TAN Harmoni and Figtree are embedded as base64 woff2, so the app renders
 identically offline and exports never fall back to a substitute font. The

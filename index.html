@@ -281,23 +281,35 @@
   /* A filler card is deliberately not an event: brand purple against whatever
      tint the frame is wearing, with the sans for the words and the display
      face kept to the ornament, since a review is a sentence, not a headline. */
-  .ev.quote{
-    background:#4E2FA6;color:#fff;
-    display:flex;flex-direction:column;justify-content:center;
-  }
+  /* Deliberately not flex-centred: html2canvas ignores justify-content, so the
+     card would sit centred on screen and top-aligned in the export. Top-aligned
+     is what the event cards do anyway, which keeps the row reading as one grid. */
+  .ev.quote{background:#4E2FA6;color:#fff}
   .ev.quote.has-by{padding-bottom:54px}      /* room for the pinned credit */
   /* Two spare slots sit side by side by definition — they are the tail of the
      last row — so one card takes both rather than splitting one thought in two. */
+  /* Only the width changes. Type stays at one size across every card on the
+     slide, so a wide card reads as more room rather than as a different scale. */
   .ev.quote.wide{grid-column:span 2}
-  .ev.quote.wide .q-mark{font-size:88px;line-height:.72;height:50px}
-  .ev.quote.wide .q-text{font-size:34px;line-height:39px;-webkit-line-clamp:4}
-  .q-mark{
-    font-family:var(--display);font-size:76px;line-height:.72;height:44px;margin:0 0 4px;
-    color:rgba(255,255,255,.5);
-  }
   .q-text{
     font-size:27px;line-height:31px;font-weight:500;margin:0;
     display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  /* Its own element rather than an inline pseudo on .q-text: a mark big enough
+     to read overflows the line box it would lead, and .q-text is measured by
+     scrollHeight to decide whether a quote needs trimming, so an overflowing
+     glyph would make every quote look too long.
+
+     TAN Harmoni draws this glyph small and high — at any size the ink is the
+     top 18.5% of the line box, leaving four fifths of it empty underneath,
+     which is what stranded the mark above the words. Cropping that away with
+     overflow is no good: html2canvas ignores it, so screen and export disagree.
+     The negative margin pulls the text up through the dead space instead, which
+     both renderers agree on. Change the size and the margin moves with it:
+     margin-bottom = gap - 0.89 x font-size. */
+  .q-mark{
+    font-family:var(--display);font-size:118px;line-height:normal;
+    margin:0 0 -93px;color:rgba(255,255,255,.55);
   }
   .q-by{
     position:absolute;left:19px;right:19px;bottom:19px;margin:0;
@@ -369,7 +381,7 @@
 <main id="editor">
   <div class="card">
     <h1>Event Carousel</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 20</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 22</span></p>
 
     <label for="dateLabel">Date label (shown on slide header)</label>
     <input id="dateLabel" class="field" value="AUG 21 - 22" autocomplete="off">
@@ -1331,6 +1343,43 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return out;
   }
 
+  // Whether a quote fits a card is a layout question, so it is measured against
+  // the real card metrics in a detached node rather than guessed from a
+  // character count. One probe, resized per question, kept between calls.
+  var fitProbe = null;
+
+  function fitsIn(text, wide){
+    if(!fitProbe){
+      fitProbe = document.createElement("div");
+      fitProbe.style.cssText = "position:fixed;left:-10000px;top:0;visibility:hidden";
+      fitProbe.innerHTML = '<article class="ev quote"><p class="q-text"></p></article>';
+      document.body.appendChild(fitProbe);
+    }
+    var card = fitProbe.firstChild, el = card.firstChild;
+    card.className = "ev quote" + (wide ? " wide" : "");
+    card.style.width = (wide ? 601 : 293) + "px";
+    el.textContent = text;
+    return el.scrollHeight <= el.clientHeight + 1;
+  }
+
+  // A spare slot is one card wide or two, and a review that overflows the narrow
+  // one may sit happily in the wide one. So rather than handing the pool out in
+  // blind order, it is split by what actually fits and the long ones are steered
+  // to the wide slots. Order inside each group is untouched, so typed quotes
+  // still come out ahead of store reviews.
+  function placeFillers(slots){
+    var brief = [], roomy = [];
+    fillers.forEach(function(f){ (fitsIn(f.text, false) ? brief : roomy).push(f); });
+    slots.forEach(function(slot){
+      // Falling back to the other group is better than leaving a hole; a long
+      // quote in a narrow card is trimmed, which is the last resort.
+      var from = slot.wide ? (roomy.length ? roomy : brief)
+                           : (brief.length ? brief : roomy);
+      var f = from.shift();
+      if(f) slot.slide.fills.push({ text: f.text, by: f.by, wide: slot.wide });
+    });
+  }
+
   // Cards land three to a row, so a slide leaves 0, 1 or 2 slots spare.
   function emptyCells(count){
     return count ? Math.ceil(count / 3) * 3 - count : 0;
@@ -1451,26 +1500,23 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     // Flat index so an edited header can be written back from anywhere. The
     // tint counter skips the title slide, which has no frame to colour, so the
     // first event slide of every carousel still comes out pink.
+    // One filler per slide at most: a single spare slot gets a card its own
+    // size, two spare slots get one card across both. The slots are gathered
+    // first so the pool can be matched to them by size rather than in order.
     allSlides = [];
-    var fi = 0;
+    var slots = [];
     decks.forEach(function(d){
       var t = 0;
       d.slides.forEach(function(s){
         if(!s.cover) s.tint = TINTS[t++ % TINTS.length];
-        // Handed out in order across the whole run.
         s.fills = [];
-        // One filler per slide at most: a single spare slot gets a card its own
-        // size, two spare slots get one card across both. Copied rather than
-        // referenced so editing it on the slide doesn't reach back into the pool.
         var gaps = s.cover ? 0 : emptyCells(s.items.length);
-        if(gaps && fi < fillers.length){
-          var f = fillers[fi++];
-          s.fills.push({ text: f.text, by: f.by, wide: gaps === 2 });
-        }
+        if(gaps) slots.push({ slide: s, wide: gaps === 2 });
         s._s = allSlides.length;
         allSlides.push(s);
       });
     });
+    placeFillers(slots);
     if(deckIdx >= decks.length) deckIdx = 0;
     idx = 0;
   }
