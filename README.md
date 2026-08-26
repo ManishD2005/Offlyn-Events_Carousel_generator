@@ -9,8 +9,34 @@ Turns a CSV of events into branded Offlyn slide carousels, ready to post.
 - Paste or upload a CSV. Any column order — a mapper guesses which column is which and shows a live preview of the first card.
 - Groups events into one carousel per day, ordered by start time.
 - Renders 4:5 slides (1080×1350) with 9 event cards each, matching the Offlyn brand.
+- Upload a title slide as a PNG — it leads every carousel as slide 1.
 - Exports per day: PDF, a zip of PNGs, or a single slide as PNG.
 - Click any text on a slide to edit it before exporting.
+
+## Title slide
+
+Optional. Upload (or drag in) a PNG or JPG on the editor screen and it becomes
+slide 1 of every carousel, ahead of the event slides. It's drawn straight onto
+the 1080×1350 canvas rather than going through html2canvas, so a 4:5 image
+exports pixel-for-pixel; anything else is cropped to fill, and the uploader says
+so before you generate.
+
+## Export naming
+
+Files are named for the day they cover, then the slide number, so a folder of
+them sorts by date:
+
+```
+2026-08-28-1.png   ← title slide
+2026-08-28-2.png
+2026-08-28-3.png
+2026-08-28.pdf
+2026-08-28.zip
+```
+
+The date comes from the earliest event on that carousel. If the sheet carried no
+parseable date, the name falls back to the slide header instead (`28-aug-1.png`)
+and the download menu flags it.
 
 ## Column handling
 

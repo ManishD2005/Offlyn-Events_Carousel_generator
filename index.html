@@ -118,6 +118,25 @@
   .maps select:focus{border-color:var(--violet);outline:none}
   @media (max-width:520px){ .maps{grid-template-columns:1fr} }
 
+  .coverbox{margin:22px 0 0}
+  .coverbox .hint{font-weight:500;color:var(--muted)}
+  .cover-have{
+    display:flex;align-items:center;gap:14px;margin-top:12px;padding:12px 14px;
+    background:#F5F1E8;border-radius:13px;
+  }
+  .cover-have[hidden]{display:none}
+  .cover-have img{
+    width:52px;height:65px;object-fit:cover;border-radius:6px;background:#fff;
+    box-shadow:0 1px 4px rgba(30,30,30,.12);flex-shrink:0;
+  }
+  .cover-meta{flex:1;min-width:0;font-size:12px;color:var(--muted)}
+  .cover-meta b{
+    display:block;font-size:13.5px;color:var(--ink);font-weight:600;margin-bottom:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .cover-meta .off{color:#B07A15}
+  .btn-ghost.sm{padding:9px 14px;font-size:13px;flex-shrink:0}
+
   /* ─────────────── Deck ─────────────── */
   #deck{display:none;min-height:100vh;background:var(--stage);color:#EDEAE2;padding:0 0 40px}
 
@@ -163,6 +182,9 @@
   .menu .sep{height:1px;background:#363636;margin:6px 4px}
   .menu .lab{padding:8px 11px 4px;font-size:11px;font-weight:700;letter-spacing:.06em;
     text-transform:uppercase;color:#7E7E78}
+  .menu .fn{padding:7px 11px 4px;margin-top:2px;border-top:1px solid #363636;
+    font-size:11.5px;color:#7E7E78;font-family:var(--mono);word-break:break-all}
+  .menu .fn .off{color:#8E8E88;font-family:var(--sans)}
 
   .pager{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;padding:16px 20px 4px}
   .nav{
@@ -226,6 +248,10 @@
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
   }
 
+  /* The uploaded title slide, cropped to fill the same 4:5 frame. */
+  .slide.cover{padding:0;overflow:hidden}
+  .slide.cover img{width:100%;height:100%;object-fit:cover;display:block}
+
   [data-f]{outline:none;border-radius:4px}
   [data-f]:hover{box-shadow:0 0 0 2px rgba(124,58,237,.28)}
   [data-f]:focus{box-shadow:0 0 0 2px var(--violet)}
@@ -272,7 +298,7 @@
 <main id="editor">
   <div class="card">
     <h1>Event Carousel</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 12</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 13</span></p>
 
     <label for="dateLabel">Date label (shown on slide header)</label>
     <input id="dateLabel" class="field" value="21 - 22 AUG" autocomplete="off">
@@ -319,6 +345,19 @@
       <div class="preview" id="preview"></div>
     </div>
 
+    <div class="coverbox">
+      <label for="coverBtn">Title slide <span class="hint">optional &mdash; leads every carousel as slide 1</span></label>
+      <div class="row" style="margin:0">
+        <button class="btn-upload" id="coverBtn" type="button">Upload title slide (PNG)</button>
+      </div>
+      <input type="file" id="coverFile" accept="image/png,image/jpeg" hidden>
+      <div class="cover-have" id="coverHave" hidden>
+        <img id="coverThumb" alt="">
+        <div class="cover-meta"><b id="coverName"></b><span id="coverDim"></span></div>
+        <button class="btn-ghost sm" id="coverClear" type="button">Remove</button>
+      </div>
+    </div>
+
     <button class="btn-go" id="go" type="button" disabled style="margin-top:18px">Generate Slides &rarr;</button>
   </div>
 </main>
@@ -347,7 +386,7 @@
   </div>
 
   <div class="stage"><div class="fit" id="fit"></div></div>
-  <p class="hintline">Click any text on a slide to edit it</p>
+  <p class="hintline" id="hintline">Click any text on a slide to edit it</p>
 </section>
 
 <script>/*! html2canvas 1.4.1 | MIT */
@@ -884,6 +923,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   var editor=$("editor"), deck=$("deck"), fit=$("fit");
   var csvEl=$("csv"), dateEl=$("dateLabel"), dateLive=$("dateLive"), errEl=$("err"), goBtn=$("go");
   var events=[], decks=[], allSlides=[], deckIdx=0, idx=0;
+  var cover = null;                       // the uploaded title slide, as a data URL
 
   /* ── CSV parsing (handles quoted fields) ───────────────── */
   function parseLine(line){
@@ -1029,6 +1069,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   }
 
   function slideHTML(slide, si){
+    if(slide.cover) return '<div class="slide cover"><img src="' + slide.src + '" alt="Title slide"></div>';
     var cards = slide.items.map(cardHTML).join("");
     return '<div class="slide">'
       + '<div class="s-top"><div>'
@@ -1103,6 +1144,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
     if(!decks.length) decks = [{ label: manual, slides: [{ label: manual, items: [] }] }];
 
+    // Each day is posted as its own carousel, so the title slide leads each one.
+    // It carries no items, which keeps the event counts on the tabs honest.
+    if(cover){
+      decks.forEach(function(d){
+        d.slides.unshift({ cover:true, src:cover.src, label:d.label, items:[] });
+      });
+    }
+
     // Flat index so an edited header can be written back from anywhere.
     allSlides = [];
     decks.forEach(function(d){
@@ -1167,6 +1216,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       + (decks.length > 1 ? "" : "  \u00b7  " + deckCount(curDeck()) + " events");
     $("prev").disabled = n < 2;
     $("next").disabled = n < 2;
+    $("hintline").textContent = s.cover
+      ? "Title slide — the image you uploaded, exported as slide 1"
+      : "Click any text on a slide to edit it";
     renderTabs();
     renderDots();
     scale();
@@ -1307,6 +1359,56 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     r.readAsText(f);
   });
 
+  /* -- Title slide -------------------------------------------
+     Held as a data URL so the export never needs a second read of the file. */
+  var coverBtn = $("coverBtn"), coverFile = $("coverFile");
+
+  function showCover(){
+    $("coverHave").hidden = !cover;
+    coverBtn.textContent = cover ? "Replace title slide" : "Upload title slide (PNG)";
+    if(!cover) return;
+    $("coverThumb").src = cover.src;
+    $("coverName").textContent = cover.name;
+    var off = Math.abs(cover.w / cover.h - W / H) > 0.02;
+    $("coverDim").innerHTML = cover.w + " × " + cover.h + (off
+      ? ' · <span class="off">not 4:5 — cropped to fill ' + W + " × " + H + "</span>"
+      : " · 4:5, exports unchanged");
+  }
+
+  function loadCover(f){
+    if(!f) return;
+    if(!/^image\//.test(f.type)){
+      errEl.textContent = "The title slide has to be a PNG or a JPG.";
+      return;
+    }
+    var r = new FileReader();
+    r.onload = function(){
+      var img = new Image();
+      img.onload = function(){
+        cover = { src:r.result, name:f.name, w:img.naturalWidth, h:img.naturalHeight };
+        errEl.textContent = "";
+        showCover();
+      };
+      img.onerror = function(){ errEl.textContent = "Couldn't decode that image."; };
+      img.src = r.result;
+    };
+    r.onerror = function(){ errEl.textContent = "Couldn't read that file."; };
+    r.readAsDataURL(f);
+  }
+
+  coverBtn.onclick = function(){ coverFile.click(); };
+  // Cleared so re-picking the same file still fires a change event.
+  coverFile.onchange = function(e){ loadCover(e.target.files[0]); coverFile.value = ""; };
+  $("coverClear").onclick = function(){ cover = null; showCover(); };
+
+  ["dragenter","dragover"].forEach(function(t){
+    coverBtn.addEventListener(t, function(e){ e.preventDefault(); coverBtn.classList.add("drag"); });
+  });
+  ["dragleave","drop"].forEach(function(t){
+    coverBtn.addEventListener(t, function(e){ e.preventDefault(); coverBtn.classList.remove("drag"); });
+  });
+  coverBtn.addEventListener("drop", function(e){ loadCover(e.dataTransfer.files[0]); });
+
   goBtn.onclick = function(){
     analyse(csvEl.value);
     events = buildEvents(currentMapping());
@@ -1340,6 +1442,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       html += '<div class="sep"></div><div class="lab">Everything</div>'
         + '<button type="button" data-x="pdfall">PDF &mdash; all ' + decks.length + ' days</button>';
     }
+    var base = deckBase(curDeck());
+    html += '<div class="fn">' + esc(base) + '-1.png, ' + esc(base) + '-2.png …'
+      + (deckDateKey(curDeck()) ? "" : ' <span class="off">(no date in the sheet — named from the header)</span>')
+      + '</div>';
     m.innerHTML = html;
   }
 
@@ -1358,7 +1464,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var x = e.target.getAttribute && e.target.getAttribute("data-x");
     if(!x) return;
     openMenu(false);
-    var base = slugify(curDeck().label);
+    var base = deckBase(curDeck());
     if(x === "pdf")    makePDF(curSlides(), base + ".pdf");
     if(x === "pdfall") makePDF(allSlides, "offlyn-all-days.pdf");
     if(x === "zip")    zipPNGs();
@@ -1372,6 +1478,21 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   function slugify(s){
     return String(s||"slide").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "slide";
   }
+
+  // Exports are named for the day they cover, then the slide number, so a folder
+  // of them sorts by date: 2026-08-28-1.png, 2026-08-28-2.png, and so on. Sheets
+  // with no parseable date fall back to the slide header.
+  function deckDateKey(d){
+    var best = null;
+    d.slides.forEach(function(s){
+      (s.items || []).forEach(function(e){
+        if(e._d && (!best || e._d.ord < best.ord)) best = e._d;
+      });
+    });
+    return best ? best.key : "";
+  }
+
+  function deckBase(d){ return deckDateKey(d) || slugify(d.label); }
 
   function setBusy(msg){
     $("busy").textContent = msg || "";
@@ -1392,8 +1513,30 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     el.textContent = full.slice(0, lo).replace(/\s+$/,"") + "\u2026";
   }
 
+  // The title slide is a supplied bitmap, so draw it straight onto a 1080x1350
+  // canvas, cropped to fill, rather than round-tripping it through html2canvas.
+  function shootCover(src){
+    return new Promise(function(res, rej){
+      var img = new Image();
+      img.onload = function(){
+        var c = document.createElement("canvas");
+        c.width = W; c.height = H;
+        var ctx = c.getContext("2d");
+        ctx.fillStyle = "#F2EBCF";
+        ctx.fillRect(0, 0, W, H);
+        var k = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+        var dw = img.naturalWidth * k, dh = img.naturalHeight * k;
+        ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+        res(c);
+      };
+      img.onerror = function(){ rej(new Error("the title slide couldn't be decoded")); };
+      img.src = src;
+    });
+  }
+
   // Render one slide into a detached, unscaled node and rasterise it.
   function shoot(slide){
+    if(slide.cover) return shootCover(slide.src);
     var holder = document.createElement("div");
     holder.style.cssText = "position:fixed;left:-10000px;top:0;width:" + W + "px;height:" + H + "px;";
     holder.innerHTML = slideHTML(slide, slide._s);
@@ -1439,7 +1582,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var s = curSlides()[idx];
     setBusy("Rendering\u2026");
     shoot(s).then(toBlob).then(function(blob){
-      download(blob, slugify(curDeck().label) + "-" + (idx+1) + ".png");
+      download(blob, deckBase(curDeck()) + "-" + (idx+1) + ".png");
       setBusy("");
     }).catch(function(err){
       setBusy("");
@@ -1449,20 +1592,20 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   // Whole carousel -> a .zip of numbered .pngs
   function zipPNGs(){
-    var list = curSlides(), zip = new JSZip(), base = slugify(curDeck().label);
+    var list = curSlides(), zip = new JSZip(), base = deckBase(curDeck());
     var i = 0;
     setBusy("Rendering 1 of " + list.length + "\u2026");
     function step(){
       if(i >= list.length){
         setBusy("Zipping\u2026");
         return zip.generateAsync({type:"blob"}).then(function(blob){
-          download(blob, base + "-slides.zip");
+          download(blob, base + ".zip");
           setBusy("");
         });
       }
       setBusy("Rendering " + (i+1) + " of " + list.length + "\u2026");
       return shoot(list[i]).then(toBlob).then(function(blob){
-        zip.file(base + "-" + ("0" + (i+1)).slice(-2) + ".png", blob);
+        zip.file(base + "-" + (i+1) + ".png", blob);
         i++;
         return step();
       });
@@ -1523,6 +1666,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   });
 
   window.addEventListener("resize", scale);
+  showCover();
   checkReady();
 })();
 </script>
