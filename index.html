@@ -127,6 +127,9 @@
   .fillwrap{margin-top:2px}
   .fillwrap textarea.field{height:104px}
   .coverbox .check.store{margin:14px 0 0;font-weight:500;color:var(--muted)}
+  .fillwrap>label{margin-top:12px}
+  .fillwrap>label .hint{font-weight:500;color:var(--muted)}
+  .fillwrap>label .hint b{font-family:var(--mono);font-weight:600;font-size:12.5px}
   .fillnote{margin:9px 0 0;font-size:12.5px;color:var(--muted)}
   .fillnote b{color:var(--ink);font-weight:600}
   .fillwrap[hidden]{display:none}
@@ -283,6 +286,11 @@
     display:flex;flex-direction:column;justify-content:center;
   }
   .ev.quote.has-by{padding-bottom:54px}      /* room for the pinned credit */
+  /* Two spare slots sit side by side by definition — they are the tail of the
+     last row — so one card takes both rather than splitting one thought in two. */
+  .ev.quote.wide{grid-column:span 2}
+  .ev.quote.wide .q-mark{font-size:88px;line-height:.72;height:50px}
+  .ev.quote.wide .q-text{font-size:34px;line-height:39px;-webkit-line-clamp:4}
   .q-mark{
     font-family:var(--display);font-size:76px;line-height:.72;height:44px;margin:0 0 4px;
     color:rgba(255,255,255,.5);
@@ -361,7 +369,7 @@
 <main id="editor">
   <div class="card">
     <h1>Event Carousel</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 19</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 20</span></p>
 
     <label for="dateLabel">Date label (shown on slide header)</label>
     <input id="dateLabel" class="field" value="AUG 21 - 22" autocomplete="off">
@@ -427,6 +435,8 @@
         Fill leftover card slots with quotes or reviews
       </label>
       <div class="fillwrap" id="fillWrap" hidden>
+        <label for="fillText">Your quotes <span class="hint">one per line &mdash;
+          add <b>| a name</b> to credit one</span></label>
         <textarea id="fillText" class="field" spellcheck="false"
           placeholder="Best pop-up I&#39;ve been to all year | Priya, Bengaluru&#10;Come for the food, stay for the people"></textarea>
         <div class="row" style="margin:10px 0 0">
@@ -1328,7 +1338,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   function fillHTML(f, si, k){
     var at = ' data-i="' + si + ':' + k + '" contenteditable="true" spellcheck="false"';
-    return '<article class="ev quote' + (f.by ? " has-by" : "") + '">'
+    return '<article class="ev quote' + (f.by ? " has-by" : "") + (f.wide ? " wide" : "") + '">'
       + '<p class="q-mark" aria-hidden="true">“</p>'
       + '<p class="q-text" data-f="fill"' + at + '>' + esc(f.text) + '</p>'
       + (f.by ? '<p class="q-by" data-f="fillby"' + at + '>' + esc(f.by) + '</p>' : "")
@@ -1449,12 +1459,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         if(!s.cover) s.tint = TINTS[t++ % TINTS.length];
         // Handed out in order across the whole run.
         s.fills = [];
-        if(!s.cover){
-          // No wrapping: the index only moves forward, so a run never repeats
-          // itself, and gaps past the end of the pool simply stay empty.
-          for(var g = emptyCells(s.items.length); g > 0 && fi < fillers.length; g--){
-            s.fills.push(fillers[fi++]);
-          }
+        // One filler per slide at most: a single spare slot gets a card its own
+        // size, two spare slots get one card across both. Copied rather than
+        // referenced so editing it on the slide doesn't reach back into the pool.
+        var gaps = s.cover ? 0 : emptyCells(s.items.length);
+        if(gaps && fi < fillers.length){
+          var f = fillers[fi++];
+          s.fills.push({ text: f.text, by: f.by, wide: gaps === 2 });
         }
         s._s = allSlides.length;
         allSlides.push(s);

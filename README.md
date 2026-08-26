@@ -67,12 +67,16 @@ just the words. A line that starts with a quote mark is read as CSV instead, so
 a review containing commas survives. Surrounding quote marks are stripped —
 the card adds its own.
 
+A slide takes at most one filler. One spare slot gets a card its own size; two
+spare slots — always side by side, being the tail of the last row — get a single
+card across both, set larger, rather than one thought split in half.
+
 Entries are handed out in order and never twice — see below. Once the pool runs
 out the leftover slots simply stay empty. Like everything else on a slide, a
 filler can be edited in place before exporting.
 
-They are capped at five lines and the credit to one, both trimmed with an
-ellipsis on export.
+Quotes are capped at five lines in a normal card and four in a wide one, the
+credit at one line, all trimmed with an ellipsis on export.
 
 ### App Store reviews
 
