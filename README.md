@@ -12,7 +12,9 @@ Turns a CSV of events into branded Offlyn slide carousels, ready to post.
 - Renders 4:5 slides (1080×1350) with up to 9 event cards each, matching the Offlyn brand.
 - Upload a title slide as a PNG — it leads every carousel as slide 1.
 - Exports per day: PDF, a zip of PNGs, or a single slide as PNG.
-- Click any text on a slide to edit it before exporting.
+- Click any text on a slide to edit it before exporting. A title too long for
+  three lines is flagged under the slide, and the flag is the button that puts
+  your caret in it.
 
 ## How days become carousels
 
@@ -67,7 +69,7 @@ The mapper reads four fields. It recognises them by header name and by content:
 
 | Field | Source | Notes |
 |---|---|---|
-| Event title | `Title` | Clipped to three lines; the toolbar flags how many are too long |
+| Event title | `Title` | Clipped to three lines; over-long ones are flagged under the slide |
 | Start time | `Time` | `9:30 AM – 11:45 AM` → `9:30 AM`; `19:00` → `7:00 PM` |
 | Host | `Description` | Extracts the name from `Hosted by X — …` |
 | City | `City` | `Bengaluru` → `BLR`. Falls back to scanning the address |
@@ -121,3 +123,7 @@ libraries (jsPDF, JSZip, html2canvas) — leave them alone.
 TAN Harmoni and Figtree are embedded as base64 woff2, so the app renders
 identically offline and exports never fall back to a substitute font. The
 background texture is embedded the same way, which is most of the file's size.
+
+`favicon.svg` is kept alongside as the editable source, but the copy the page
+actually uses is the data URI in the `<head>` — re-inline it if you change the
+file, or the tab icon won't move.
