@@ -149,6 +149,14 @@
     font-size:12.5px;color:var(--muted);
   }
   .preview b{color:var(--ink);font-weight:600}
+  /* An unknown city still prints, it just prints whatever was typed, so this
+     says so rather than letting it reach the slide unnoticed. */
+  .citynote{
+    margin:9px 0 0;font-size:12.5px;line-height:1.5;color:#8A6A20;
+    background:rgba(224,160,48,.13);border-radius:8px;padding:8px 11px;
+  }
+  .citynote b{font-weight:700;color:#6E5312}
+  .citynote[hidden]{display:none}
   .preview .band{
     display:inline-block;color:#fff;border-radius:4px;padding:2px 7px;
     font-size:11.5px;font-weight:600;margin-right:7px;vertical-align:1px;
@@ -420,7 +428,7 @@
 <main id="editor">
   <div class="card">
     <h1>Offlyn &mdash; Events carousel generator</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 24</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 25</span></p>
 
     <div class="step"><span class="n">1</span> Your events</div>
 
@@ -460,6 +468,7 @@
         <div><label for="mDate">Date <span class="hint">writes the slide headers</span></label><select id="mDate"></select></div>
       </div>
       <div class="preview" id="preview"></div>
+      <p class="citynote" id="cityNote" hidden></p>
 
       <div class="mapsplit" id="mapsplit">
         <div><label for="dateMode">Split into carousels</label><select id="dateMode">
@@ -997,8 +1006,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   var CITY_ALIASES = {
     "blr":"BLR","bengaluru":"BLR","bangalore":"BLR",
     "del":"DEL","delhi":"DEL","new delhi":"DEL","ncr":"DEL","gurgaon":"DEL","gurugram":"DEL","noida":"DEL",
+    "greater noida":"DEL","ghaziabad":"DEL","faridabad":"DEL",
     "mum":"MUM","bom":"MUM","mumbai":"MUM","bombay":"MUM",
-    "hyd":"HYD","hyderabad":"HYD",
+    "hyd":"HYD","hyderabad":"HYD","secunderabad":"HYD",
     "che":"CHE","chennai":"CHE","madras":"CHE",
     "pun":"PUN","pune":"PUN",
     "kol":"KOL","kolkata":"KOL","calcutta":"KOL",
@@ -1186,17 +1196,31 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return m;
   }
 
-  // If the city cell is blank or unrecognised, look for a known city inside the
-  // rest of the row (venue addresses usually carry it).
-  function cityFromRow(r, primary){
+  // Whole-word patterns for the fallback scan. Built once; bare codes are left
+  // out because two or three letters match far too much running text.
+  var CITY_SCAN = Object.keys(CITY_ALIASES)
+    .filter(function(name){ return name.length >= 4; })
+    .map(function(name){
+      return {
+        code: CITY_ALIASES[name],
+        re: new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b")
+      };
+    });
+
+  // If the city cell is blank or unrecognised, look for a known city in the rest
+  // of the row, since venue and address cells usually carry it. Two things this
+  // must not do: match inside a longer word — "Kalyani Studios" is not Kalyan —
+  // or read the event title, where "Delhi Belly" and "Chennai Express" are films
+  // and not places. Earliest match wins, which also settles the nested names:
+  // "new delhi" starts before the "delhi" inside it.
+  function cityFromRow(r, primary, titleCol){
     var code = primary >= 0 ? cityCode(r[primary]) : "";
     if(CITIES[code]) return code;
-    var blob = r.join(" ").toLowerCase();
+    var blob = r.filter(function(_, i){ return i !== titleCol; }).join(" ").toLowerCase();
     var best = "", at = 1e9;
-    Object.keys(CITY_ALIASES).forEach(function(name){
-      if(name.length < 4) return;                       // skip bare codes here
-      var i = blob.indexOf(name);
-      if(i > -1 && i < at){ at = i; best = CITY_ALIASES[name]; }
+    CITY_SCAN.forEach(function(c){
+      var m = blob.match(c.re);
+      if(m && m.index < at){ at = m.index; best = c.code; }
     });
     return best || code;
   }
@@ -1207,7 +1231,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         title: m.title >= 0 ? String(r[m.title]||"").trim() : "",
         host : m.host  >= 0 ? hostName(r[m.host]) : "",
         time : m.time  >= 0 ? startTime(r[m.time]) : "",
-        city : cityFromRow(r, m.city),
+        city : cityFromRow(r, m.city, m.title),
         _d   : m.date >= 0 ? parseDate(r[m.date]) : null
       };
     }).filter(function(e){ return e.title.trim() !== ""; });
@@ -1739,10 +1763,34 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     };
   }
 
+  // Anything that isn't a known code reaches the card as raw text, so the rows
+  // it came from are worth naming while the sheet is still in front of you.
+  function reportCities(list){
+    var note = $("cityNote"), odd = {}, order = [], blank = 0;
+    list.forEach(function(e){
+      if(!e.city){ blank++; return; }
+      if(CITIES[e.city]) return;
+      if(!odd[e.city]){ odd[e.city] = 0; order.push(e.city); }
+      odd[e.city]++;
+    });
+    var bits = [];
+    if(order.length){
+      var rowCount = order.reduce(function(a, k){ return a + odd[k]; }, 0);
+      bits.push("Not a city we know, in " + plural(rowCount, "row") + ": <b>"
+        + order.slice(0, 6).map(esc).join("</b>, <b>") + "</b>"
+        + (order.length > 6 ? " and " + (order.length - 6) + " more" : "")
+        + ". They print exactly as written.");
+    }
+    if(blank) bits.push(plural(blank, "row") + " with no city &mdash; those cards show a <b>?</b>.");
+    note.innerHTML = bits.join("<br>");
+    note.hidden = !bits.length;
+  }
+
   function drawPreview(){
     var box = $("preview");
-    if(!rows.length){ box.innerHTML = ""; return; }
-    var e = buildEvents(currentMapping())[0];
+    if(!rows.length){ box.innerHTML = ""; $("cityNote").hidden = true; return; }
+    var all = buildEvents(currentMapping()), e = all[0];
+    reportCities(all);
     if(!e){ box.innerHTML = "No usable rows yet."; return; }
     box.innerHTML = "First card will read: "
       + '<span class="band" style="background:' + (CITIES[e.city] || FALLBACK) + '">' + (esc(e.city) || "?") + '</span>'

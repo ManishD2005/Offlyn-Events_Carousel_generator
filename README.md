@@ -165,6 +165,24 @@ Known city codes live in one object near the top of the app script (`CITIES`),
 with the spellings that resolve to them in `CITY_ALIASES` just below. Mumbai
 resolves to `MUM`; change that entry if you want `BOM` on the cards instead.
 
+A city is resolved in two steps. The mapped City cell is looked up in
+`CITY_ALIASES` first, matched whole and case-insensitively. If that yields
+nothing known, the rest of the row is scanned for a city name, since venue and
+address cells usually carry one — `Third Space Indiranagar Bengaluru` resolves
+to BLR with the City cell empty.
+
+Two limits on that scan, both deliberate:
+
+- **Whole words only.** `Kalyani Studios` is not Kalyan.
+- **Never the event title.** `Delhi Belly Screening` and `Chennai Express Watch
+  Party` are films, not places, and were being read as Delhi and Chennai.
+
+Anything still unresolved is printed as typed and uppercased, so `Jaipur`
+becomes `JAIPUR` and a typo like `Bnegaluru` becomes `BNEGALURU`. Nothing
+guesses at a misspelling. The mapper names those rows before you generate, so
+you can fix the sheet or add the alias — that note also counts rows with no
+city at all, which print a `?`.
+
 ## The slide design
 
 Every measurement in the `.slide` rules is taken from the reference artwork,
