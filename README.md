@@ -177,11 +177,17 @@ Two limits on that scan, both deliberate:
 - **Never the event title.** `Delhi Belly Screening` and `Chennai Express Watch
   Party` are films, not places, and were being read as Delhi and Chennai.
 
-Anything still unresolved is printed as typed and uppercased, so `Jaipur`
-becomes `JAIPUR` and a typo like `Bnegaluru` becomes `BNEGALURU`. Nothing
-guesses at a misspelling. The mapper names those rows before you generate, so
-you can fix the sheet or add the alias — that note also counts rows with no
-city at all, which print a `?`.
+Anything still unresolved is printed as typed and uppercased. That is the escape
+hatch, and it is the simplest way to handle a city the table has never heard of:
+**put your own code in the sheet.** `JAI`, `COK`, `LKO` all reach the card
+exactly as written, with no entry in `CITY_ALIASES` and no code change. Add an
+alias only when you want to keep writing the city out in full.
+
+Which is why the mapper only comments on the long ones. Two to four letters is
+read as a code you meant; anything longer that resolved to nothing is either a
+city the table doesn't carry or a typo — `Jaipur` prints as `JAIPUR`, and
+`Bnegaluru` as `BNEGALURU`. Nothing guesses at a misspelling. That note also
+counts rows with no city at all, which print a `?`.
 
 ## The slide design
 

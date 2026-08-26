@@ -428,7 +428,7 @@
 <main id="editor">
   <div class="card">
     <h1>Offlyn &mdash; Events carousel generator</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 25</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 26</span></p>
 
     <div class="step"><span class="n">1</span> Your events</div>
 
@@ -442,6 +442,7 @@
         Keep a header row if you like &mdash; it's detected and used to label the columns below.
         City can be a code (<b class="c-del">DEL</b>, <b class="c-blr">BLR</b>, <b class="c-bom">MUM</b>)
         or a full name (Bengaluru, New Delhi, Mumbai); either way the code prints on the card.
+        A code we don't know works too &mdash; <b>JAI</b>, <b>COK</b> &mdash; it prints as typed.
         Dates are read from the sheet, so the slide headers write themselves.
       </div>
     </div>
@@ -1765,21 +1766,26 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   // Anything that isn't a known code reaches the card as raw text, so the rows
   // it came from are worth naming while the sheet is still in front of you.
+  // Two to four letters is someone writing their own code — JAI, COK, GOA — and
+  // it prints as-is, which is the point. Anything longer that resolved to
+  // nothing is a name the table doesn't carry, or a typo, and worth saying.
+  function looksLikeCode(v){ return /^[A-Z]{2,4}$/.test(v); }
+
   function reportCities(list){
     var note = $("cityNote"), odd = {}, order = [], blank = 0;
     list.forEach(function(e){
       if(!e.city){ blank++; return; }
-      if(CITIES[e.city]) return;
+      if(CITIES[e.city] || looksLikeCode(e.city)) return;
       if(!odd[e.city]){ odd[e.city] = 0; order.push(e.city); }
       odd[e.city]++;
     });
     var bits = [];
     if(order.length){
       var rowCount = order.reduce(function(a, k){ return a + odd[k]; }, 0);
-      bits.push("Not a city we know, in " + plural(rowCount, "row") + ": <b>"
+      bits.push("Spelled out rather than coded, in " + plural(rowCount, "row") + ": <b>"
         + order.slice(0, 6).map(esc).join("</b>, <b>") + "</b>"
         + (order.length > 6 ? " and " + (order.length - 6) + " more" : "")
-        + ". They print exactly as written.");
+        + ". These print in full &mdash; put a short code in the sheet instead.");
     }
     if(blank) bits.push(plural(blank, "row") + " with no city &mdash; those cards show a <b>?</b>.");
     note.innerHTML = bits.join("<br>");
