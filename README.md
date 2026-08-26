@@ -7,6 +7,7 @@ Turns a CSV of events into branded Offlyn slide carousels, ready to post.
 ## What it does
 
 - Paste or upload a CSV. Any column order — a mapper guesses which column is which and shows a live preview of the first card.
+- The editor runs as three steps: your events, then an optional title slide, then optional filler quotes.
 - Groups events into one carousel per day, ordered by start time. Days too small
   to fill a slide merge into the next date rather than going out half empty.
 - Renders 4:5 slides (1080×1350) with up to 9 event cards each, matching the Offlyn brand.
@@ -136,6 +137,17 @@ them sorts by date:
 The date comes from the earliest event on that carousel. If the sheet carried no
 parseable date, the name falls back to the slide header instead (`28-aug-1.png`)
 and the download menu flags it.
+
+## The slide header
+
+Normally you don't type it. With a date column mapped the header is written from
+the dates on the slide — `AUG 28`, or `AUG 28 - 29` where a carousel spans two.
+
+The one case that needs typing is a sheet with no parseable date, or **One
+carousel — ignore dates** chosen deliberately. Only then does a **Slide header**
+field appear beside the layout dropdown, because only then is there nothing to
+read it from. It stays hidden the rest of the time rather than inviting you to
+fill in a field that would be ignored.
 
 ## Column handling
 

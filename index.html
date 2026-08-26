@@ -70,7 +70,26 @@
   textarea.field{font-family:var(--mono);font-size:13.5px;line-height:1.65;height:270px;resize:vertical}
   textarea.field::placeholder{color:#B8B4AB}
 
+  /* The page is four decisions, only the first of which is required, so each
+     gets a heading instead of running together as one long form. */
+  .step{
+    display:flex;align-items:center;gap:10px;margin:34px 0 12px;
+    font-size:12.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6C6559;
+  }
+  .step .n{
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    width:21px;height:21px;border-radius:50%;background:var(--violet);color:#fff;
+    font-size:11.5px;font-weight:700;letter-spacing:0;
+  }
+  .step .opt{
+    margin-left:auto;text-transform:none;letter-spacing:0;
+    font-weight:500;font-size:12.5px;color:#A09A8E;
+  }
+  .step+.help{margin-top:0}
+
   .help{background:#F5F1E8;border-radius:13px;padding:18px 20px;margin:26px 0 28px;font-size:13px}
+  .help.mini{margin:0 0 14px;padding:15px 17px}
+  .help .code .pipe{color:var(--violet);font-weight:700}
   .help b{font-size:13px}
   .help .code{font-family:var(--mono);font-size:12.5px;line-height:1.85;margin-top:6px}
   .help .code .dim{color:#9C968A}
@@ -99,6 +118,24 @@
   .mapper>b{display:block;font-size:13.5px;margin-bottom:3px}
   .mapper>.note{color:var(--muted);font-size:12.5px;margin-bottom:14px}
   .maps{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+  /* Choosing the layout isn't naming a column, so it sits below a rule rather
+     than as a sixth dropdown in the same grid. */
+  .mapsplit{
+    display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;
+    margin-top:15px;padding-top:15px;border-top:1px solid #E4E0D5;
+  }
+  .mapsplit label{display:block;font-size:12px;font-weight:700;margin-bottom:5px;color:#4A453B}
+  .mapsplit .hint{font-weight:500;color:var(--muted)}
+  .mapsplit select,.mapsplit input{
+    width:100%;padding:10px 11px;border:1px solid #E4E1DA;border-radius:9px;background:#fff;
+    font-family:inherit;font-size:13.5px;color:var(--ink);
+  }
+  .mapsplit select:focus,.mapsplit input:focus{border-color:var(--violet);outline:none;box-shadow:none}
+  .mapsplit>div[hidden]{display:none}
+  /* With the header field hidden there is no second column to sit beside, and a
+     half-width select clips the option that explains the merging. */
+  .mapsplit.solo>div:first-child{grid-column:1 / -1}
+  @media (max-width:520px){ .mapsplit{grid-template-columns:1fr} }
   .maps label{display:block;font-size:12px;font-weight:700;margin-bottom:5px;color:#4A453B}
   .maps .hint{font-weight:500;color:var(--muted)}
   .maps .grouprow{display:flex;align-items:flex-end}
@@ -381,21 +418,21 @@
 <main id="editor">
   <div class="card">
     <h1>Event Carousel</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 22</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 23</span></p>
 
-    <label for="dateLabel">Date label (shown on slide header)</label>
-    <input id="dateLabel" class="field" value="AUG 21 - 22" autocomplete="off">
+    <div class="step"><span class="n">1</span> Your events</div>
 
     <div class="help">
       <b>CSV format &mdash; any column order:</b>
       <div class="code">
-        Event Title, Host Name, Time, City<br>
-        <span class="dim">Let's Talk with Founders, Graysheep, 04:00 PM, DEL</span>
+        Event Title, Host Name, Time, City, Date<br>
+        <span class="dim">Let's Talk with Founders, Graysheep, 04:00 PM, DEL, 2026-08-28</span>
       </div>
       <div class="cities">
         Keep a header row if you like &mdash; it's detected and used to label the columns below.
         City can be a code (<b class="c-del">DEL</b>, <b class="c-blr">BLR</b>, <b class="c-bom">MUM</b>)
         or a full name (Bengaluru, New Delhi, Mumbai); either way the code prints on the card.
+        Dates are read from the sheet, so the slide headers write themselves.
       </div>
     </div>
 
@@ -411,25 +448,33 @@
     <input type="file" id="file" accept=".csv,text/csv" hidden>
 
     <div class="mapper" id="mapper" hidden>
-      <b>Which column is which?</b>
-      <div class="note">Guessed from your sheet. Change any that look wrong.</div>
+      <b>We read your columns like this</b>
+      <div class="note">Change any that look wrong &mdash; the preview updates as you do.</div>
       <div class="maps">
-        <div><label for="mCity">City <span class="hint">printed on each card</span></label><select id="mCity"></select></div>
         <div><label for="mTitle">Event title</label><select id="mTitle"></select></div>
-        <div><label for="mTime">Start time <span class="hint">range &rarr; start</span></label><select id="mTime"></select></div>
+        <div><label for="mTime">Start time <span class="hint">a range becomes its start</span></label><select id="mTime"></select></div>
         <div><label for="mHost">Host <span class="hint">reads &ldquo;Hosted by&hellip;&rdquo;</span></label><select id="mHost"></select></div>
-        <div><label for="mDate">Date <span class="hint">groups the slides</span></label><select id="mDate"></select></div>
-        <div><label for="dateMode">Slide layout</label><select id="dateMode">
-          <option value="days">One carousel per day &mdash; short days merge forward</option>
+        <div><label for="mCity">City <span class="hint">printed on each card</span></label><select id="mCity"></select></div>
+        <div><label for="mDate">Date <span class="hint">writes the slide headers</span></label><select id="mDate"></select></div>
+      </div>
+      <div class="preview" id="preview"></div>
+
+      <div class="mapsplit" id="mapsplit">
+        <div><label for="dateMode">Split into carousels</label><select id="dateMode">
+          <option value="days">One per day &mdash; short days merge</option>
           <option value="pack">One carousel &mdash; fill every slide</option>
           <option value="manual">One carousel &mdash; ignore dates</option>
         </select></div>
+        <div id="dateLabelWrap" hidden>
+          <label for="dateLabel">Slide header <span class="hint">no date to read, so type it</span></label>
+          <input id="dateLabel" value="AUG 21 - 22" autocomplete="off">
+        </div>
       </div>
-      <div class="preview" id="preview"></div>
     </div>
 
+    <div class="step"><span class="n">2</span> Title slide <span class="opt">optional</span></div>
     <div class="coverbox">
-      <label for="coverBtn">Title slide <span class="hint">optional &mdash; leads every carousel as slide 1</span></label>
+      <label for="coverBtn">A PNG to lead every carousel as slide 1</label>
       <div class="row" style="margin:0">
         <button class="btn-upload" id="coverBtn" type="button">Upload title slide (PNG)</button>
       </div>
@@ -441,14 +486,27 @@
       </div>
     </div>
 
+    <div class="step"><span class="n">3</span> Filler quotes <span class="opt">optional</span></div>
     <div class="coverbox">
       <label class="check" for="fillOn">
         <input type="checkbox" id="fillOn">
         Fill leftover card slots with quotes or reviews
       </label>
       <div class="fillwrap" id="fillWrap" hidden>
-        <label for="fillText">Your quotes <span class="hint">one per line &mdash;
-          add <b>| a name</b> to credit one</span></label>
+        <div class="help mini">
+          <b>One review per line:</b>
+          <div class="code">
+            Best pop-up I've been to all year <span class="pipe">|</span> Priya, Bengaluru<br>
+            <span class="dim">Come for the food, stay for the people</span><br>
+            <span class="dim">&quot;Genuinely, the nicest crowd, hands down&quot;,Rahul M.</span>
+          </div>
+          <div class="cities">
+            Anything after a <b>|</b> is the credit; a line without one is just the quote.
+            Start a line with a <b>&quot;</b> and it's read as CSV instead, so commas inside
+            a review survive. Longer reviews are given the wider cards automatically.
+          </div>
+        </div>
+        <label for="fillText">Your quotes</label>
         <textarea id="fillText" class="field" spellcheck="false"
           placeholder="Best pop-up I&#39;ve been to all year | Priya, Bengaluru&#10;Come for the food, stay for the people"></textarea>
         <div class="row" style="margin:10px 0 0">
@@ -464,7 +522,7 @@
       </div>
     </div>
 
-    <button class="btn-go" id="go" type="button" disabled style="margin-top:18px">Generate Slides &rarr;</button>
+    <button class="btn-go" id="go" type="button" disabled style="margin-top:30px">Generate Slides &rarr;</button>
   </div>
 </main>
 
@@ -1692,11 +1750,23 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   }
 
   Object.keys(SELS).forEach(function(k){ SELS[k].addEventListener("change", drawPreview); });
+  // The typed header is only read when nothing in the sheet can supply one, so
+  // showing it the rest of the time invites people to fill in a field that will
+  // be ignored. It follows the layout choice rather than sitting above the CSV.
+  function syncDateLabel(){
+    var typed = $("dateMode").value === "manual";
+    $("dateLabelWrap").hidden = !typed;
+    $("mapsplit").classList.toggle("solo", !typed);
+  }
+
   SELS.date.addEventListener("change", function(){
     var on = parseInt(SELS.date.value, 10) >= 0;
     $("dateMode").disabled = !on;
     $("dateMode").value = on ? "pack" : "manual";
+    syncDateLabel();
   });
+
+  $("dateMode").addEventListener("change", syncDateLabel);
 
   function refreshMapper(){
     analyse(csvEl.value);
@@ -1713,6 +1783,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       $("dateMode").disabled = !hasDate;
       if(!hasDate) $("dateMode").value = "manual";
       else if($("dateMode").value === "manual") $("dateMode").value = "days";
+      syncDateLabel();
       drawPreview();
     }
     goBtn.disabled = !on;
