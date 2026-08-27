@@ -11,7 +11,7 @@ Turns a CSV of events into branded Offlyn slide carousels, ready to post.
 - Groups events into one carousel per day, ordered by start time. Days too small
   to fill a slide merge into the next date rather than going out half empty.
 - Renders 4:5 slides (1080×1350) with up to 9 event cards each, matching the Offlyn brand.
-- Upload a title slide as a PNG — it leads every carousel as slide 1.
+- Give each carousel its own title slide — a PNG that leads that day as slide 1.
 - Optionally fill the leftover card slots with quotes, or with the app's own
   4★-and-up App Store reviews. Nothing is used twice.
 - Exports per day: PDF, a zip of PNGs, or a single slide as PNG.
@@ -43,11 +43,17 @@ day boundaries entirely.
 
 ## Title slide
 
-Optional. Upload (or drag in) a PNG or JPG on the editor screen and it becomes
-slide 1 of every carousel, ahead of the event slides. It's drawn straight onto
-the 1080×1350 canvas rather than going through html2canvas, so a 4:5 image
-exports pixel-for-pixel; anything else is cropped to fill, and the uploader says
-so before you generate.
+Optional, and **per carousel** — each day gets its own, or none. The control sits
+in the slide bar next to the counter, on the screen where you can see the day it
+belongs to: **Add title slide for AUG 28**. Upload or drag a PNG or JPG onto it
+and it becomes slide 1 of that carousel alone.
+
+It's drawn straight onto the 1080×1350 canvas rather than going through
+html2canvas, so a 4:5 image exports pixel-for-pixel; anything else is cropped to
+fill and the bar says so.
+
+Title slides are keyed by the carousel's export name, so going back to edit the
+sheet and generating again keeps each day's slide with its day.
 
 ## Filler cards
 
