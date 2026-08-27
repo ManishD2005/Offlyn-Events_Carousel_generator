@@ -239,23 +239,33 @@
   }
   .nav:hover{background:#2E2E2E}
   .nav:disabled{opacity:.4;cursor:default}
-  .dots{display:flex;gap:6px;align-items:center;max-width:340px;flex-wrap:wrap;justify-content:center}
-  .dot{width:7px;height:7px;border-radius:50%;background:#444;border:0;padding:0}
-  .dot.on{background:var(--violet);width:8px;height:8px}
+  /* Numbered rather than dotted: a seven-pixel dot is hard to aim at and says
+     nothing about where you are in a carousel of eleven. */
+  .dots{display:flex;gap:5px;align-items:center;max-width:560px;flex-wrap:wrap;justify-content:center}
+  .dot{
+    min-width:27px;height:27px;padding:0 7px;border-radius:8px;
+    border:1px solid #2F2F2F;background:#1C1C1C;color:#8E8E88;
+    font-family:inherit;font-size:12px;font-weight:600;line-height:1;transition:.12s;
+  }
+  .dot:hover{background:#2A2A2A;color:#DAD7CF;border-color:#454545}
+  .dot.on{background:var(--violet);border-color:var(--violet);color:#fff}
+  /* A dashed edge marks the title slide without disturbing the numbering, which
+     has to keep matching the exported file names. */
+  .dot.iscover{border-style:dashed;border-color:#4A4A4A}
+  .dot.iscover.on{border-color:#C4B2F8}
   .status{color:#7E7E78;font-size:12.5px;margin-left:4px}
   .busy{color:#B9B9B3;font-size:12.5px}
-  /* The title slide belongs to one carousel, so its control lives beside the
-     slide counter rather than back on the editor screen. */
-  .coverctl{display:flex;align-items:center;gap:6px}
-  .pill{
-    border:1px solid #3A3A3A;background:#212121;color:#DAD7CF;border-radius:999px;
-    padding:6px 13px;font-family:inherit;font-size:12.5px;font-weight:600;transition:.15s;
-  }
-  .pill:hover{background:#2E2E2E;border-color:#4E4E4E}
-  .pill.drag{border-color:var(--violet);background:rgba(124,58,237,.16);color:#fff}
-  .pill.drop{color:#C89090;border-color:#463232}
-  .pill.drop:hover{background:#3A2626;color:#E8B0B0;border-color:#5C3E3E}
-  .pill[hidden]{display:none}
+  /* A carousel-level action, like Download, so it sits with Download rather than
+     in the row that pages through slides. */
+  .coverctl{display:flex;align-items:center;gap:5px;flex-shrink:0}
+  /* Flat fills, no inset shadow: the rasteriser draws inset shadows as a hatch,
+     and this button ends up in exported screenshots often enough to matter. */
+  .btn.ghost.has{background:#3B2F63;color:#D3C6FA}
+  .btn.ghost.has:hover{background:#463878}
+  .btn.ghost.drag{background:var(--violet);color:#fff}
+  .btn.ghost.x{padding:9px 11px;color:#C89090;font-size:15px;line-height:1}
+  .btn.ghost.x:hover{background:#3A2626;color:#E8B0B0}
+  .btn[hidden]{display:none}
   .datefield{
     background:#212121;color:#fff;border:1px solid #333;border-radius:8px;padding:7px 12px;
     font-family:inherit;font-size:13px;font-weight:600;width:150px;text-align:center;
@@ -426,7 +436,7 @@
 <main id="editor">
   <div class="card">
     <h1>Offlyn &mdash; Events carousel generator</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 28</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 29</span></p>
 
     <div class="step"><span class="n">1</span> Your events</div>
 
@@ -530,6 +540,13 @@
   <header class="topbar">
     <button class="btn ghost" id="back" type="button">&larr; Edit</button>
     <nav class="days" id="tabs"></nav>
+    <span class="coverctl">
+      <button class="btn ghost" id="deckCoverBtn" type="button">Title slide</button>
+      <button class="btn ghost x" id="deckCoverClear" type="button" hidden
+        aria-label="Remove this carousel's title slide" title="Remove">&times;</button>
+    </span>
+    <input type="file" id="deckCoverFile" accept="image/png,image/jpeg" hidden>
+
     <div class="exportwrap">
       <button class="btn solid" id="exportBtn" type="button" aria-haspopup="true" aria-expanded="false">
         Download <span class="caret">&#9662;</span>
@@ -544,11 +561,6 @@
     <button class="nav" id="next" type="button" aria-label="Next slide">&#8250;</button>
     <span class="status" id="status"></span>
     <span class="busy" id="busy"></span>
-    <span class="coverctl">
-      <button class="pill" id="deckCoverBtn" type="button">Add title slide</button>
-      <button class="pill drop" id="deckCoverClear" type="button" hidden>Remove</button>
-    </span>
-    <input type="file" id="deckCoverFile" accept="image/png,image/jpeg" hidden>
     <input class="datefield" id="dateLive" hidden autocomplete="off" aria-label="Slide header text">
   </div>
 
@@ -1726,32 +1738,36 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return plural(deckCount(d), "event") + " · " + plural(d.slides.length, "slide");
   }
 
+  // Just the date on each tab. Repeating the counts across every tab made the
+  // bar long enough to scroll, and only the open carousel's counts are worth
+  // reading anyway — those sit under the slide, next to the chips they describe.
   function renderTabs(){
     var bar = $("tabs");
     bar.innerHTML = "";
-    if(decks.length < 2){
-      bar.innerHTML = '<span class="status">' + deckSummary(curDeck()) + '</span>';
-      return;
-    }
+    if(decks.length < 2) return;
     decks.forEach(function(d,i){
       var b = document.createElement("button");
       b.type = "button";
       b.className = "day" + (i === deckIdx ? " on" : "");
-      b.innerHTML = esc(d.label) + ' <span class="n">' + deckSummary(d) + '</span>';
+      b.textContent = d.label;
+      b.title = deckSummary(d);
       b.onclick = function(){ deckIdx = i; idx = 0; render(); };
       bar.appendChild(b);
     });
   }
 
   function renderDots(){
-    var d=$("dots"); d.innerHTML="";
-    curSlides().forEach(function(_,i){
-      var b=document.createElement("button");
-      b.className = "dot" + (i===idx ? " on" : "");
-      b.type="button";
-      b.setAttribute("aria-label","Go to slide "+(i+1));
-      b.onclick=function(){ idx=i; render(); };
-      d.appendChild(b);
+    var box = $("dots");
+    box.innerHTML = "";
+    curSlides().forEach(function(s, i){
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "dot" + (i === idx ? " on" : "") + (s.cover ? " iscover" : "");
+      b.textContent = i + 1;
+      b.title = s.cover ? "Title slide" : "Slide " + (i + 1);
+      b.setAttribute("aria-label", (s.cover ? "Title slide, " : "") + "slide " + (i + 1));
+      b.onclick = function(){ idx = i; render(); };
+      box.appendChild(b);
     });
   }
 
@@ -1788,7 +1804,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     fit.innerHTML = slideHTML(s, s._s);
     showFooter(markClipped(fit), s);
     var n = curSlides().length;
-    $("status").textContent = "Slide " + (idx+1) + " of " + n;
+    $("status").textContent = deckSummary(curDeck());
     $("prev").disabled = n < 2;
     $("next").disabled = n < 2;
     syncDeckCover();
@@ -1982,9 +1998,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   function coverKey(){ return decks.length ? deckBase(curDeck()) : ""; }
 
   function syncDeckCover(){
-    var has = !!covers[coverKey()], many = decks.length > 1;
-    $("deckCoverBtn").textContent = (has ? "Replace title slide" : "Add title slide")
-      + (many ? " for " + curDeck().label : "");
+    var has = !!covers[coverKey()], btn = $("deckCoverBtn");
+    // The plus makes it read as something to press when there's nothing there
+    // yet; once there is, the tint carries the state and the sign is noise.
+    btn.textContent = has ? "Title slide" : "+ Title slide";
+    btn.classList.toggle("has", has);
+    btn.title = (has ? "Replace the title slide on " : "Add a title slide to ")
+      + (decks.length > 1 ? curDeck().label : "this carousel");
     $("deckCoverClear").hidden = !has;
   }
 

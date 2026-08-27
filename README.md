@@ -44,9 +44,13 @@ day boundaries entirely.
 ## Title slide
 
 Optional, and **per carousel** — each day gets its own, or none. The control sits
-in the slide bar next to the counter, on the screen where you can see the day it
-belongs to: **Add title slide for AUG 28**. Upload or drag a PNG or JPG onto it
-and it becomes slide 1 of that carousel alone.
+in the top bar beside Download, since both act on the carousel you have open,
+not on the slide you're looking at. Upload or drag a PNG or JPG onto **+ Title
+slide** and it becomes slide 1 of that carousel alone; the button turns violet
+once one is set, and the `×` beside it takes it off again.
+
+In the slide row below, that carousel's title slide is the chip with a dashed
+edge. It still counts as slide 1, because the exported files number it that way.
 
 It's drawn straight onto the 1080×1350 canvas rather than going through
 html2canvas, so a 4:5 image exports pixel-for-pixel; anything else is cropped to
