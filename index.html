@@ -436,7 +436,7 @@
 <main id="editor">
   <div class="card">
     <h1>Offlyn &mdash; Events carousel generator</h1>
-    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 29</span></p>
+    <p class="sub">Turn a CSV of events into branded Offlyn carousels. <span class="build">build 30</span></p>
 
     <div class="step"><span class="n">1</span> Your events</div>
 
@@ -482,6 +482,7 @@
       <div class="mapsplit" id="mapsplit">
         <div><label for="dateMode">Split into carousels</label><select id="dateMode">
           <option value="days">One per day &mdash; short days merge</option>
+          <option value="city">One per city &mdash; BLR, BOM, DEL&hellip;</option>
           <option value="pack">One carousel &mdash; fill every slide</option>
           <option value="manual">One carousel &mdash; ignore dates</option>
         </select></div>
@@ -1108,6 +1109,22 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   // Derived, so adding a spelling above never has to be registered twice.
   var CITIES = {};
   Object.keys(CITY_ALIASES).forEach(function(k){ CITIES[CITY_ALIASES[k]] = 1; });
+
+  // A slide header grouped by place wants the name, not the code. Taken from the
+  // same table: the first spelling longer than a code is the one people say.
+  // Seeded where that would pick the airport town over the place — Goa's own
+  // name is three letters, so the derivation would land on Panaji.
+  var CITY_NAME = { GOI:"goa" };
+  Object.keys(CITY_ALIASES).forEach(function(a){
+    var code = CITY_ALIASES[a];
+    if(a.length > 3 && !CITY_NAME[code]) CITY_NAME[code] = a;
+  });
+
+  function cityName(code){
+    var name = CITY_NAME[code];
+    if(!name) return code || "Other";
+    return name.replace(/\b[a-z]/g, function(c){ return c.toUpperCase(); });
+  }
   // "9:30 AM – 11:45 AM" -> "9:30 AM".  "19:00" -> "7:00 PM".
   function startTime(v){
     var s = String(v||"").trim();
@@ -1590,7 +1607,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var rows = Math.max(1, Math.ceil(slide.items.length / 3)), fh = frameHeight(slide.items.length);
     return '<div class="slide">'
       + '<div class="s-top">'
-      +   '<p class="eyebrow">Events happening on</p>'
+      /* "Events in X" rather than "Events happening in X": the eyebrow runs to
+         the logo at 815px, and the longest name in the city table overruns it by
+         a clear margin at the longer phrasing. */
+      +   '<p class="eyebrow">' + (slide.where ? "Events in " + esc(slide.where) : "Events happening on") + '</p>'
       +   '<p class="s-date" contenteditable="true" spellcheck="false" data-f="label" data-i="' + si + '">' + esc(slide.label) + '</p>'
       +   '<div class="logo">' + LOGO + '</div>'
       + '</div>'
@@ -1658,6 +1678,25 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return groups;
   }
 
+  /* One carousel per city, biggest first. Unlike a quiet day, a quiet city is
+     never merged into another: a Mumbai post has no business carrying
+     Bengaluru's events, however few of them there are. Events inside a city stay
+     in date-then-time order, so its slide headers still read forwards. */
+  function byCity(){
+    var buckets = {}, order = [];
+    events.forEach(function(e){
+      var k = e.city || "";
+      if(!buckets[k]){ buckets[k] = []; order.push(k); }
+      buckets[k].push(e);
+    });
+    order.sort(function(a, b){
+      return buckets[b].length - buckets[a].length || (a < b ? -1 : 1);
+    });
+    return order.map(function(k){
+      return { code: k, name: cityName(k), list: buckets[k].slice().sort(byDateThenTime) };
+    });
+  }
+
   // "days"   one carousel per date  (default)
   // "pack"   a single carousel, every slide filled, headers span dates
   // "manual" a single carousel, dates ignored
@@ -1670,6 +1709,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       byDate().forEach(function(list){
         var label = rangeLabel(list, manual);
         decks.push({ label: label, slides: makeSlides(list, label) });
+      });
+    } else if(dateMode === "city"){
+      byCity().forEach(function(g){
+        var slides = makeSlides(g.list, manual);
+        // Carried on the slide so the header can say where, not just when.
+        slides.forEach(function(sl){ sl.where = g.name; });
+        decks.push({ label: g.name, city: g.code, slides: slides });
       });
     } else if(dateMode === "pack"){
       decks.push({ label: "All days", slides: makeSlides(events.slice().sort(byDateThenTime), manual) });
@@ -1926,15 +1972,28 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   // showing it the rest of the time invites people to fill in a field that will
   // be ignored. It follows the layout choice rather than sitting above the CSV.
   function syncDateLabel(){
-    var typed = $("dateMode").value === "manual";
+    var hasDate = parseInt(SELS.date.value, 10) >= 0;
+    var typed = $("dateMode").value === "manual" || !hasDate;
     $("dateLabelWrap").hidden = !typed;
     $("mapsplit").classList.toggle("solo", !typed);
   }
 
+  // Grouping by city doesn't need dates, so the select stays usable without
+  // them; only the two modes that read dates are closed off.
+  function syncModes(hasDate){
+    var sel = $("dateMode");
+    sel.disabled = false;
+    ["days", "pack"].forEach(function(v){
+      var o = sel.querySelector('option[value="' + v + '"]');
+      if(o) o.disabled = !hasDate;
+    });
+    if(!hasDate && (sel.value === "days" || sel.value === "pack")) sel.value = "manual";
+  }
+
   SELS.date.addEventListener("change", function(){
     var on = parseInt(SELS.date.value, 10) >= 0;
-    $("dateMode").disabled = !on;
-    $("dateMode").value = on ? "pack" : "manual";
+    syncModes(on);
+    if(on && $("dateMode").value === "manual") $("dateMode").value = "days";
     syncDateLabel();
   });
 
@@ -1952,9 +2011,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       fillSelect(SELS.host,  m.host,  true);
       fillSelect(SELS.date,  m.date,  true);
       var hasDate = m.date >= 0;
-      $("dateMode").disabled = !hasDate;
-      if(!hasDate) $("dateMode").value = "manual";
-      else if($("dateMode").value === "manual") $("dateMode").value = "days";
+      syncModes(hasDate);
+      if(hasDate && $("dateMode").value === "manual") $("dateMode").value = "days";
       syncDateLabel();
       drawPreview();
     }
@@ -2112,7 +2170,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   goBtn.onclick = function(){
     analyse(csvEl.value);
     events = buildEvents(currentMapping());
-    dateMode = $("dateMode").disabled ? "manual" : $("dateMode").value;
+    dateMode = $("dateMode").value;
     if(!events.length){
       errEl.textContent = "No rows found — check that the Event title column is mapped correctly.";
       return;
@@ -2161,7 +2219,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
     var base = deckBase(curDeck());
     html += '<div class="fn">' + esc(base) + '-1.png, ' + esc(base) + '-2.png …'
-      + (deckDateKey(curDeck()) ? "" : ' <span class="off">(no date in the sheet — named from the header)</span>')
+      + (deckDateKey(curDeck()) || curDeck().city !== undefined ? ""
+          : ' <span class="off">(no date in the sheet — named from the header)</span>')
       + '</div>';
     m.innerHTML = html;
   }
@@ -2209,7 +2268,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return best ? best.key : "";
   }
 
-  function deckBase(d){ return deckDateKey(d) || slugify(d.label); }
+  function deckBase(d){
+    var date = deckDateKey(d);
+    // City carousels routinely cover the same dates, so the code goes in the
+    // name or all three would export over each other.
+    if(d.city !== undefined) return slugify(d.city || "other") + (date ? "-" + date : "");
+    return date || slugify(d.label);
+  }
 
   function setBusy(msg){
     $("busy").textContent = msg || "";

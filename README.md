@@ -41,6 +41,23 @@ merged carousel reads `AUG 28 - 29` while a later all-29th slide reads `AUG 29`.
 Pick **One carousel — fill every slide** in the mapper if you'd rather ignore
 day boundaries entirely.
 
+## Grouping by city instead
+
+**One per city** in the same dropdown groups by place rather than by date: a
+Bengaluru post, a Mumbai post, a Delhi post. Biggest city first.
+
+Unlike a quiet day, a quiet city is never merged into another — a Mumbai post
+has no business carrying Bengaluru's events, however few there are. A city with
+three events just gets a one-slide carousel.
+
+The slide header keeps both facts: the eyebrow reads `EVENTS IN BENGALURU` and
+the big line stays the date range those events span. Exports take the city code
+as well as the date — `blr-2026-08-28-1.png` — since three cities routinely
+cover the same days and would otherwise overwrite each other.
+
+This mode needs no Date column. Without one, only the two date-driven modes grey
+out; grouping by city still works and the header falls back to what you type.
+
 ## Title slide
 
 Optional, and **per carousel** — each day gets its own, or none. The control sits
